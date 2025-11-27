@@ -9,6 +9,7 @@ import Transactions from "@/pages/Transactions";
 import Accounts from "@/pages/Accounts";
 import Reports from "@/pages/Reports";
 import Categories from "@/pages/Categories";
+import Settings from "@/pages/Settings";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/accounts" component={Accounts} />
       <Route path="/reports" component={Reports} />
       <Route path="/categories" component={Categories} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );

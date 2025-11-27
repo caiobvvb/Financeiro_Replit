@@ -31,7 +31,7 @@ export default function Dashboard() {
       {/* Header */}
       <header className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Painel</h1>
           <p className="text-muted-foreground">Bem-vindo de volta, Ana!</p>
         </div>
         <div className="flex gap-2">
@@ -215,9 +215,11 @@ export default function Dashboard() {
                                     <p className="text-xs text-muted-foreground">{transaction.category} • {transaction.date}</p>
                                 </div>
                             </div>
-                            <span className={cn("font-bold font-mono", transaction.amount > 0 ? "text-emerald-600" : "text-red-600")}>
-                                {transaction.amount > 0 ? "+" : ""} R$ {Math.abs(transaction.amount).toFixed(2)}
-                            </span>
+                            <div className="text-right">
+                                <span className={cn("font-bold font-mono block", transaction.amount > 0 ? "text-emerald-600" : "text-red-600")}>
+                                    {transaction.amount > 0 ? "+" : ""} R$ {Math.abs(transaction.amount).toFixed(2)}
+                                </span>
+                            </div>
                         </div>
                     ))}
                 </div>

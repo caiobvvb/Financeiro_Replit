@@ -11,12 +11,12 @@ import {
 } from "lucide-react";
 
 const sidebarItems = [
-  { icon: LayoutGrid, label: "Dashboard", href: "/" },
-  { icon: List, label: "Transactions", href: "/transactions" },
-  { icon: CreditCard, label: "Accounts", href: "/accounts" }, // From first image
-  { icon: PieChart, label: "Reports", href: "/reports" },
-  { icon: Tags, label: "Categories", href: "/categories" },
-  { icon: Settings, label: "Settings", href: "/settings" },
+  { icon: LayoutGrid, label: "Painel", href: "/" },
+  { icon: List, label: "Transações", href: "/transactions" },
+  { icon: CreditCard, label: "Contas", href: "/accounts" },
+  { icon: PieChart, label: "Relatórios", href: "/reports" },
+  { icon: Tags, label: "Categorias", href: "/categories" },
+  { icon: Settings, label: "Configurações", href: "/settings" },
 ];
 
 export function Sidebar() {
@@ -60,7 +60,7 @@ export function Sidebar() {
       <div className="p-4 mt-auto">
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer font-medium text-sm">
           <LogOut className="w-5 h-5" />
-          Log out
+          Sair
         </div>
         
         <div className="mt-6 flex items-center gap-3 px-2">

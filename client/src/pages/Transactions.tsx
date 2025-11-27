@@ -2,17 +2,27 @@ import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { 
   Search, 
   Filter, 
   Plus, 
   ArrowUpCircle, 
   ArrowDownCircle, 
-  MoreVertical, 
   Trash2, 
   Edit2 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const transactions = [
   { id: 1, name: "Salário - Empresa X", category: "Salário", date: "05 Nov, 2023", amount: 5000.00, type: "income", icon: <ArrowUpCircle className="w-6 h-6 text-emerald-500" /> },
@@ -30,10 +40,80 @@ export default function Transactions() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Todas as Transações</h1>
           <p className="text-muted-foreground">Veja, filtre e gerencie todas as suas entradas e saídas.</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20">
-            <Plus className="w-4 h-4 mr-2" />
-            Nova Transação
-        </Button>
+        
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20">
+                <Plus className="w-4 h-4 mr-2" />
+                Nova Transação
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Adicionar Transação</DialogTitle>
+              <DialogDescription>
+                Insira os detalhes da nova transação aqui. Clique em salvar quando terminar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="description" className="text-right">
+                  Descrição
+                </Label>
+                <Input id="description" placeholder="Ex: Supermercado" className="col-span-3" />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="amount" className="text-right">
+                  Valor
+                </Label>
+                <Input id="amount" placeholder="R$ 0,00" className="col-span-3" />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="type" className="text-right">
+                  Tipo
+                </Label>
+                <div className="col-span-3">
+                    <Select>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Selecione o tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="expense">Despesa</SelectItem>
+                            <SelectItem value="income">Receita</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="category" className="text-right">
+                  Categoria
+                </Label>
+                <div className="col-span-3">
+                    <Select>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Selecione a categoria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="food">Alimentação</SelectItem>
+                            <SelectItem value="transport">Transporte</SelectItem>
+                            <SelectItem value="housing">Moradia</SelectItem>
+                            <SelectItem value="leisure">Lazer</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="date" className="text-right">
+                  Data
+                </Label>
+                <Input id="date" type="date" className="col-span-3" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit">Salvar Transação</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="border-none shadow-md">
