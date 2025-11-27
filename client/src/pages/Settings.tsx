@@ -6,8 +6,38 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { User, Bell, Shield, Globe, Moon } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function Settings() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data?.user;
+      if (u) {
+        setEmail(u.email || "");
+        const meta: any = u.user_metadata || {};
+        setName(meta.name || "");
+      }
+    });
+  }, []);
+
+  async function saveProfile() {
+    setSaving(true);
+    setInfo(null);
+    const { error } = await supabase.auth.updateUser({ data: { name } });
+    setSaving(false);
+    if (error) {
+      setInfo("Não foi possível salvar");
+      return;
+    }
+    setInfo("Alterações salvas");
+  }
+
   return (
     <Layout>
       <div className="mb-8">
@@ -30,13 +60,14 @@ export default function Settings() {
                 <CardContent className="space-y-4">
                     <div className="grid gap-2">
                         <Label htmlFor="name">Nome Completo</Label>
-                        <Input id="name" defaultValue="Ana Oliveira" />
+                        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" defaultValue="ana@email.com" type="email" />
+                        <Input id="email" value={email} type="email" disabled />
                     </div>
-                    <Button className="w-fit">Salvar Alterações</Button>
+                    {info && <p className="text-sm text-muted-foreground">{info}</p>}
+                    <Button className="w-fit" onClick={saveProfile} disabled={saving}>{saving ? "Salvando..." : "Salvar Alterações"}</Button>
                 </CardContent>
             </Card>
 

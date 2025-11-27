@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import * as React from "react";
 import { cn } from "@/lib/utils";
 import {
   LayoutGrid,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 
 const sidebarItems = [
-  { icon: LayoutGrid, label: "Painel", href: "/" },
+  { icon: LayoutGrid, label: "Painel", href: "/dashboard" },
   { icon: List, label: "Transações", href: "/transactions" },
   { icon: Calendar, label: "Calendário", href: "/calendar" },
   { icon: CreditCard, label: "Contas", href: "/accounts" },
@@ -23,6 +24,26 @@ const sidebarItems = [
 
 export function Sidebar() {
   const [location] = useLocation();
+  const [profile, setProfile] = React.useState<{ name: string; email: string } | null>(null);
+  const [, setLoc] = useLocation();
+
+  React.useEffect(() => {
+    import("@/lib/supabase").then(({ supabase }) => {
+      supabase.auth.getUser().then(({ data }) => {
+        const u = data?.user;
+        if (u) {
+          const meta: any = u.user_metadata || {};
+          setProfile({ name: meta.name || u.email || "Usuário", email: u.email || "" });
+        }
+      });
+    });
+  }, []);
+
+  async function onLogout() {
+    const { supabase } = await import("@/lib/supabase");
+    await supabase.auth.signOut();
+    setLoc("/");
+  }
 
   return (
     <aside className="w-64 h-screen bg-card border-r border-border flex flex-col fixed left-0 top-0 z-30 shadow-sm">
@@ -60,18 +81,18 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 mt-auto">
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer font-medium text-sm">
+        <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer font-medium text-sm">
           <LogOut className="w-5 h-5" />
           Sair
-        </div>
+        </button>
         
         <div className="mt-6 flex items-center gap-3 px-2">
             <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center overflow-hidden">
-                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full" />
+                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(profile?.name || profile?.email || "user")}`} alt="User" className="w-full h-full" />
             </div>
             <div className="flex flex-col">
-                <span className="text-sm font-bold text-foreground">Ana Oliveira</span>
-                <span className="text-xs text-muted-foreground">ana@email.com</span>
+                <span className="text-sm font-bold text-foreground">{profile?.name || "Usuário"}</span>
+                <span className="text-xs text-muted-foreground">{profile?.email || ""}</span>
             </div>
         </div>
       </div>
