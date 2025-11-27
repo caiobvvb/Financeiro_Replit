@@ -9,14 +9,16 @@ import {
   LogOut,
   List,
   Tags,
-  Calendar
+  Calendar,
+  Wallet
 } from "lucide-react";
 
 const sidebarItems = [
   { icon: LayoutGrid, label: "Painel", href: "/dashboard" },
   { icon: List, label: "Transações", href: "/transactions" },
   { icon: Calendar, label: "Calendário", href: "/calendar" },
-  { icon: CreditCard, label: "Contas", href: "/accounts" },
+  { icon: CreditCard, label: "Cartões", href: "/accounts" },
+  { icon: Wallet, label: "Contas Bancárias", href: "/contas" },
   { icon: PieChart, label: "Relatórios", href: "/reports" },
   { icon: Tags, label: "Categorias", href: "/categories" },
   { icon: Settings, label: "Configurações", href: "/settings" },

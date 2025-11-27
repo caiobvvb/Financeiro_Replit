@@ -20,41 +20,23 @@ export default function Accounts() {
     <Layout>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Minhas Contas</h1>
-          <p className="text-muted-foreground">Gerencie suas contas bancárias e cartões de crédito.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Meus Cartões</h1>
+          <p className="text-muted-foreground">Gerencie seus cartões de crédito.</p>
         </div>
         
         <Dialog>
           <DialogTrigger asChild>
             <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20">
                 <Plus className="w-4 h-4 mr-2" />
-                Adicionar Novo
+                Adicionar Cartão
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Adicionar Novo Cartão/Conta</DialogTitle>
-              <DialogDescription>
-                Cadastre um novo cartão de crédito ou conta bancária.
-              </DialogDescription>
+              <DialogTitle>Adicionar Cartão de Crédito</DialogTitle>
+              <DialogDescription>Cadastre um novo cartão de crédito.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="type" className="text-right">
-                  Tipo
-                </Label>
-                <div className="col-span-3">
-                    <Select>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Selecione o tipo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="credit">Cartão de Crédito</SelectItem>
-                            <SelectItem value="account">Conta Bancária</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-              </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="name" className="text-right">
                   Nome
@@ -62,9 +44,7 @@ export default function Accounts() {
                 <Input id="name" placeholder="Ex: Nubank Platinum" className="col-span-3" />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="limit" className="text-right">
-                  Limite/Saldo
-                </Label>
+                <Label htmlFor="limit" className="text-right">Limite</Label>
                 <Input id="limit" placeholder="R$ 0,00" className="col-span-3" />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -113,54 +93,18 @@ export default function Accounts() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Bank Accounts */}
-        <div>
-            <h3 className="text-xl font-bold mb-4">Contas Bancárias</h3>
-            <div className="space-y-4">
-                <Card className="border-none shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer">
-                    <CardContent className="p-6 flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-lg bg-purple-600 flex items-center justify-center text-white font-bold">
-                            Nu
-                        </div>
-                        <div className="flex-1">
-                            <h4 className="font-bold text-foreground">Conta Corrente</h4>
-                            <p className="text-sm text-muted-foreground">Nubank</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="font-bold text-lg">R$ 5.720,50</p>
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card className="border-none shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer">
-                    <CardContent className="p-6 flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-lg bg-orange-500 flex items-center justify-center text-white font-bold">
-                            It
-                        </div>
-                        <div className="flex-1">
-                            <h4 className="font-bold text-foreground">Poupança</h4>
-                            <p className="text-sm text-muted-foreground">Itaú</p>
-                        </div>
-                        <div className="text-right">
-                            <p className="font-bold text-lg">R$ 2.129,50</p>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-        </div>
-
-        {/* Credit Cards */}
         <div>
             <h3 className="text-xl font-bold mb-4">Cartões de Crédito</h3>
             <div className="space-y-4">
-                <Card className="border-none shadow-sm hover:shadow-md transition-all duration-200 bg-slate-100 dark:bg-slate-900/50">
-                    <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h4 className="font-bold text-foreground">Cartão Platinum</h4>
-                                <div className="w-8 h-5 bg-slate-400 rounded mt-2 opacity-50"></div>
-                            </div>
-                            <div className="px-2 py-1 bg-black text-white text-xs font-bold rounded">VISA</div>
-                        </div>
+              <Card className="border-none shadow-sm hover:shadow-md transition-all duration-200 bg-slate-100 dark:bg-slate-900/50">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h4 className="font-bold text-foreground">Cartão Platinum</h4>
+                      <div className="w-8 h-5 bg-slate-400 rounded mt-2 opacity-50"></div>
+                    </div>
+                    <div className="px-2 py-1 bg-black text-white text-xs font-bold rounded">VISA</div>
+                  </div>
                         
                         <div className="mb-2">
                             <p className="text-xs text-muted-foreground mb-1">Limite Usado</p>
@@ -175,18 +119,18 @@ export default function Accounts() {
                             <span>Limite: R$ 4.000,00</span>
                             <span>Vence: 15/mês</span>
                         </div>
-                    </CardContent>
-                </Card>
+                </CardContent>
+              </Card>
 
-                <Card className="border-none shadow-sm hover:shadow-md transition-all duration-200 bg-slate-100 dark:bg-slate-900/50">
-                    <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h4 className="font-bold text-foreground">Cartão Black</h4>
-                                <div className="w-8 h-5 bg-slate-400 rounded mt-2 opacity-50"></div>
-                            </div>
-                            <div className="px-2 py-1 bg-emerald-700 text-white text-xs font-bold rounded">MC</div>
-                        </div>
+              <Card className="border-none shadow-sm hover:shadow-md transition-all duration-200 bg-slate-100 dark:bg-slate-900/50">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h4 className="font-bold text-foreground">Cartão Black</h4>
+                      <div className="w-8 h-5 bg-slate-400 rounded mt-2 opacity-50"></div>
+                    </div>
+                    <div className="px-2 py-1 bg-emerald-700 text-white text-xs font-bold rounded">MC</div>
+                  </div>
                         
                         <div className="mb-2">
                             <p className="text-xs text-muted-foreground mb-1">Limite Usado</p>
@@ -201,10 +145,10 @@ export default function Accounts() {
                             <span>Limite: R$ 10.000,00</span>
                             <span>Vence: 20/mês</span>
                         </div>
-                    </CardContent>
-                </Card>
+                </CardContent>
+              </Card>
             </div>
-        </div>
+          </div>
       </div>
     </Layout>
   );
