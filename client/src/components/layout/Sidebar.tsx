@@ -7,12 +7,14 @@ import {
   Settings,
   LogOut,
   List,
-  Tags
+  Tags,
+  Calendar
 } from "lucide-react";
 
 const sidebarItems = [
   { icon: LayoutGrid, label: "Painel", href: "/" },
   { icon: List, label: "Transações", href: "/transactions" },
+  { icon: Calendar, label: "Calendário", href: "/calendar" },
   { icon: CreditCard, label: "Contas", href: "/accounts" },
   { icon: PieChart, label: "Relatórios", href: "/reports" },
   { icon: Tags, label: "Categorias", href: "/categories" },

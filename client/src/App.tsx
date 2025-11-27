@@ -10,6 +10,7 @@ import Accounts from "@/pages/Accounts";
 import Reports from "@/pages/Reports";
 import Categories from "@/pages/Categories";
 import Settings from "@/pages/Settings";
+import CalendarPage from "@/pages/Calendar";
 
 function Router() {
   return (
@@ -20,6 +21,7 @@ function Router() {
       <Route path="/reports" component={Reports} />
       <Route path="/categories" component={Categories} />
       <Route path="/settings" component={Settings} />
+      <Route path="/calendar" component={CalendarPage} />
       <Route component={NotFound} />
     </Switch>
   );
