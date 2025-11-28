@@ -1,4 +1,4 @@
-import { type User, type InsertUser, users, accounts, categories, transactions, type InsertAccount, type Account, type InsertCategory, type Category, type InsertTransaction, type Transaction } from "@shared/schema";
+import { type User, type InsertUser, users, accounts, categories, transactions, type InsertAccount, type Account, type InsertCategory, type Category, type InsertTransaction, type Transaction, banks, type Bank } from "@shared/schema";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { eq } from "drizzle-orm";
@@ -11,6 +11,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  listBanks(): Promise<Bank[]>;
   listAccounts(userId: string): Promise<Account[]>;
   createAccount(data: InsertAccount): Promise<Account>;
   updateAccount(id: string, data: Partial<InsertAccount>): Promise<Account | undefined>;
@@ -27,12 +28,25 @@ export interface IStorage {
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
+  private _banks: Bank[];
   private _accounts: Map<string, Account>;
   private _categories: Map<string, Category>;
   private _transactions: Map<string, Transaction>;
 
   constructor() {
     this.users = new Map();
+    this._banks = [
+      { id: "bb", code: "001", name: "Banco do Brasil", shortName: "BB", slug: "banco-do-brasil", color: "#ffcc00", logoUrl: "https://logo.clearbit.com/bancodobrasil.com.br" },
+      { id: "itau", code: "341", name: "Itaú Unibanco", shortName: "Itaú", slug: "itau", color: "#ff6600", logoUrl: "https://logo.clearbit.com/itau.com.br" },
+      { id: "bradesco", code: "237", name: "Bradesco", shortName: "Bradesco", slug: "bradesco", color: "#cc0000", logoUrl: "https://logo.clearbit.com/bradesco.com.br" },
+      { id: "santander", code: "033", name: "Santander", shortName: "Santander", slug: "santander", color: "#c8102e", logoUrl: "https://logo.clearbit.com/santander.com.br" },
+      { id: "caixa", code: "104", name: "Caixa", shortName: "Caixa", slug: "caixa", color: "#0b63ce", logoUrl: "https://logo.clearbit.com/caixa.gov.br" },
+      { id: "nubank", code: "260", name: "Nubank", shortName: "Nubank", slug: "nubank", color: "#8309fd", logoUrl: "https://logo.clearbit.com/nubank.com.br" },
+      { id: "inter", code: "077", name: "Banco Inter", shortName: "Inter", slug: "inter", color: "#ff6e00", logoUrl: "https://logo.clearbit.com/inter.co" },
+      { id: "btg", code: "208", name: "BTG Pactual", shortName: "BTG", slug: "btg", color: "#001e3c", logoUrl: "https://logo.clearbit.com/btg.com.br" },
+      { id: "c6", code: "336", name: "C6 Bank", shortName: "C6", slug: "c6", color: "#000000", logoUrl: "https://logo.clearbit.com/c6bank.com.br" },
+      { id: "sicredi", code: "748", name: "Sicredi", shortName: "Sicredi", slug: "sicredi", color: "#39a935", logoUrl: "https://logo.clearbit.com/sicredi.com.br" }
+    ];
     this._accounts = new Map();
     this._categories = new Map();
     this._transactions = new Map();
@@ -53,6 +67,10 @@ export class MemStorage implements IStorage {
     const user: User = { ...insertUser, id };
     this.users.set(id, user);
     return user;
+  }
+
+  async listBanks(): Promise<Bank[]> {
+    return this._banks;
   }
 
   async listAccounts(userId: string): Promise<Account[]> {
@@ -158,6 +176,11 @@ class DbStorage implements IStorage {
       .values({ username: insertUser.username, password: insertUser.password })
       .returning();
     return created;
+  }
+
+  async listBanks(): Promise<Bank[]> {
+    const rows = await this.db.select().from(banks);
+    return rows;
   }
 
   async listAccounts(userId: string): Promise<Account[]> {

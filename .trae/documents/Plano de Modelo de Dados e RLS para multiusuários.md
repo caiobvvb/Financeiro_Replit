@@ -1,49 +1,77 @@
 ## Objetivo
+
 Desenhar e guiar a implementação do modelo de dados (categorias, contas bancárias, cartões de crédito, transações e relacionamentos) com segurança multiusuário via RLS, mantendo o app escalável e consistente com o stack atual.
 
 ## Arquitetura de Dados
-- Banco Postgres com tabelas separadas por tipo:
-  - `bank_accounts` (Contas Bancárias)
-  - `credit_cards` (Cartões de Crédito)
-  - `categories` (Categorias)
-  - `transactions` (Transações)
-  - `transfers` (Transferências entre contas)
-- Chaves estrangeiras entre entidades; índices por `user_id` e FKs; check constraints para integridade.
-- RLS por tabela garantindo acesso apenas ao `user_id` do usuário autenticado.
+
+* Banco Postgres com tabelas separadas por tipo:
+
+  * `bank_accounts` (Contas Bancárias)
+
+  * `credit_cards` (Cartões de Crédito)
+
+  * `categories` (Categorias)
+
+  * `transactions` (Transações)
+
+  * `transfers` (Transferências entre contas)
+
+* Chaves estrangeiras entre entidades; índices por `user_id` e FKs; check constraints para integridade.
+
+* RLS por tabela garantindo acesso apenas ao `user_id` do usuário autenticado.
 
 ## Integração com Autenticação
-- Preferência: usar o Postgres do Supabase para RLS nativa (`auth.uid()`), com o cliente do frontend já usando Supabase Auth.
-- Alternativa (se usar Postgres externo/Neon): manter separação no backend (já existe) e implementar RLS via GUC (`current_setting('app.user_id')`) setado pelo servidor por conexão.
+
+* Preferência: usar o Postgres do Supabase para RLS nativa (`auth.uid()`), com o cliente do frontend já usando Supabase Auth.
+
+* Alternativa (se usar Postgres externo/Neon): manter separação no backend (já existe) e implementar RLS via GUC (`current_setting('app.user_id')`) setado pelo servidor por conexão.
 
 ## Tabelas e Relacionamentos
+
 ### Categories
-- Campos: `id`, `user_id`, `name`, `type` (`income|expense|transfer`), `parent_id?`, `archived?`, `created_at`.
-- Índices: `idx_categories_user` (`user_id`), `idx_categories_user_type` (`user_id,type`).
-- Relacionamentos: `parent_id` auto-referência para hierarquia.
+
+* Campos: `id`, `user_id`, `name`, `type` (`income|expense|transfer`), `parent_id?`, `archived?`, `created_at`.
+
+* Índices: `idx_categories_user` (`user_id`), `idx_categories_user_type` (`user_id,type`).
+
+* Relacionamentos: `parent_id` auto-referência para hierarquia.
 
 ### Bank Accounts
-- Campos: `id`, `user_id`, `name`, `institution?`, `account_type` (`checking|savings|cash|wallet`), `balance`, `currency` (default `BRL`), `created_at`.
-- Índices: `idx_bank_accounts_user` (`user_id`).
+
+* Campos: `id`, `user_id`, `name`, `institution?`, `account_type` (`checking|savings|cash|wallet`), `balance`, `currency` (default `BRL`), `created_at`.
+
+* Índices: `idx_bank_accounts_user` (`user_id`).
 
 ### Credit Cards
-- Campos: `id`, `user_id`, `name`, `brand?` (`visa|mastercard|elo|amex|hipercard|outros`), `limit_amount`, `billing_day` (1–31), `best_day` (1–31), `created_at`.
-- Índices: `idx_credit_cards_user` (`user_id`).
+
+* Campos: `id`, `user_id`, `name`, `brand?` (`visa|mastercard|elo|amex|hipercard|outros`), `limit_amount`, `billing_day` (1–31), `best_day` (1–31), `created_at`.
+
+* Índices: `idx_credit_cards_user` (`user_id`).
 
 ### Transactions (MVP unificado)
-- Campos: `id`, `user_id`, `kind` (`bank|card`), `account_id?`, `credit_card_id?`, `category_id`, `amount`, `date`, `description?`, `installments?` (>=1), `installment_index?` (>=1), `created_at`.
-- Restrição: `constraint transaction_target_fk` assegura XOR entre `account_id` e `credit_card_id` conforme `kind`.
-- Índices: `idx_transactions_user_date` (`user_id,date`), `idx_transactions_user_cat` (`user_id,category_id`).
+
+* Campos: `id`, `user_id`, `kind` (`bank|card`), `account_id?`, `credit_card_id?`, `category_id`, `amount`, `date`, `description?`, `installments?` (>=1), `installment_index?` (>=1), `created_at`.
+
+* Restrição: `constraint transaction_target_fk` assegura XOR entre `account_id` e `credit_card_id` conforme `kind`.
+
+* Índices: `idx_transactions_user_date` (`user_id,date`), `idx_transactions_user_cat` (`user_id,category_id`).
 
 ### Transfers (opcional, porém recomendado)
-- Campos: `id`, `user_id`, `from_account_id`, `to_account_id`, `amount`, `date`, `description?`, `created_at`.
-- Índices: `idx_transfers_user_date` (`user_id,date`).
+
+* Campos: `id`, `user_id`, `from_account_id`, `to_account_id`, `amount`, `date`, `description?`, `created_at`.
+
+* Índices: `idx_transfers_user_date` (`user_id,date`).
 
 ## Políticas RLS (Supabase)
+
 ### Padrão por tabela
-- `ALTER TABLE <tabela> ENABLE ROW LEVEL SECURITY;`
-- `CREATE POLICY` de `SELECT/INSERT/UPDATE/DELETE` com `USING (user_id = auth.uid())` e `WITH CHECK (user_id = auth.uid())`.
+
+* `ALTER TABLE <tabela> ENABLE ROW LEVEL SECURITY;`
+
+* `CREATE POLICY` de `SELECT/INSERT/UPDATE/DELETE` com `USING (user_id = auth.uid())` e `WITH CHECK (user_id = auth.uid())`.
 
 ## SQL (Supabase) — Criação + RLS
+
 ```sql
 -- Categories
 create table public.categories (
@@ -146,41 +174,68 @@ create policy transfers_delete on public.transfers for delete using (user_id = a
 ```
 
 ## Backend/API
-- Endpoints REST (paralelos aos já existentes):
-  - `GET/POST/PUT/DELETE /api/bank-accounts` (lista/CRUD por usuário)
-  - `GET/POST/PUT/DELETE /api/credit-cards`
-  - `GET/POST/PUT/DELETE /api/categories`
-  - `GET/POST/PUT/DELETE /api/transactions`
-  - `GET/POST/DELETE /api/transfers`
-- Todos exigem usuário em `req.user` (middleware Supabase) e vinculam `user_id` nos inserts.
+
+* Endpoints REST (paralelos aos já existentes):
+
+  * `GET/POST/PUT/DELETE /api/bank-accounts` (lista/CRUD por usuário)
+
+  * `GET/POST/PUT/DELETE /api/credit-cards`
+
+  * `GET/POST/PUT/DELETE /api/categories`
+
+  * `GET/POST/PUT/DELETE /api/transactions`
+
+  * `GET/POST/DELETE /api/transfers`
+
+* Todos exigem usuário em `req.user` (middleware Supabase) e vinculam `user_id` nos inserts.
 
 ## Frontend
-- Páginas já separadas: `"/contas"` (bancárias) e `"/accounts"` (cartões).
-- Formular criar/editar sincronizam com novos endpoints e modelos.
-- Listagens filtram por usuário (já feito via API) e categorização.
+
+* Páginas já separadas: `"/contas"` (bancárias) e `"/accounts"` (cartões).
+
+* Formular criar/editar sincronizam com novos endpoints e modelos.
+
+* Listagens filtram por usuário (já feito via API) e categorização.
 
 ## Migração com Drizzle (se preferir código/migrations)
-- Atualizar `shared/schema.ts` para refletir novas tabelas e remover o `accounts` genérico.
-- Gerar migrações com `drizzle-kit` e `db:push` para o Postgres alvo.
-- Se optar por RLS no Supabase, executar o SQL acima direto no Supabase SQL editor.
+
+* Atualizar `shared/schema.ts` para refletir novas tabelas e remover o `accounts` genérico.
+
+* Gerar migrações com `drizzle-kit` e `db:push` para o Postgres alvo.
+
+* Se optar por RLS no Supabase, executar o SQL acima direto no Supabase SQL editor.
 
 ## Alternativa RLS no Postgres externo (sem Supabase)
-- Criar RLS com `USING (user_id::text = current_setting('app.user_id', true))`.
-- No servidor, ao abrir conexão, executar `SET app.user_id = '<uuid-do-usuário>'` (escopo de transação) antes das queries.
+
+* Criar RLS com `USING (user_id::text = current_setting('app.user_id', true))`.
+
+* No servidor, ao abrir conexão, executar `SET app.user_id = '<uuid-do-usuário>'` (escopo de transação) antes das queries.
 
 ## Checklist de Validação
-- RLS ativo em todas as tabelas e testado com dois usuários.
-- Índices criados e verificadas consultas por `user_id`.
-- Inserções/updates garantem `user_id = auth.uid()`.
-- Transações respeitam a restrição XOR (`bank` vs `card`).
+
+* RLS ativo em todas as tabelas e testado com dois usuários.
+
+* Índices criados e verificadas consultas por `user_id`.
+
+* Inserções/updates garantem `user_id = auth.uid()`.
+
+* Transações respeitam a restrição XOR (`bank` vs `card`).
 
 ## Próximos Itens (depois do MVP)
-- `card_statements` (faturas mensais) e `statement_payments` (pagamentos da fatura).
-- `budgets` (orçamento por categoria/mes).
-- `payees` e `tags` para enriquecer transações.
-- Arquivos/anexos e conciliação.
+
+* `card_statements` (faturas mensais) e `statement_payments` (pagamentos da fatura).
+
+* `budgets` (orçamento por categoria/mes).
+
+* `payees` e `tags` para enriquecer transações.
+
+* Arquivos/anexos e conciliação.
 
 ## Observações
-- Nunca expor chaves de serviço do Supabase.
-- `gen_random_uuid()` requer `pgcrypto` (já habilitado no Supabase). Se usar outro Postgres, validar a extensão.
-- Manter colunas monetárias em `numeric(20,2)` para precisão.
+
+* Nunca expor chaves de serviço do Supabase.
+
+* `gen_random_uuid()` requer `pgcrypto` (já habilitado no Supabase). Se usar outro Postgres, validar a extensão.
+
+* Manter colunas monetárias em `numeric(20,2)` para precisão.
+

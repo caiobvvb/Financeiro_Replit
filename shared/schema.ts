@@ -69,3 +69,24 @@ export const insertTransactionSchema = createInsertSchema(transactions).pick({
 });
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type Transaction = typeof transactions.$inferSelect;
+
+export const banks = pgTable("banks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  shortName: text("short_name"),
+  slug: text("slug"),
+  color: text("color"),
+  logoUrl: text("logo_url"),
+});
+
+export const insertBankSchema = createInsertSchema(banks).pick({
+  code: true,
+  name: true,
+  shortName: true,
+  slug: true,
+  color: true,
+  logoUrl: true,
+});
+export type InsertBank = z.infer<typeof insertBankSchema>;
+export type Bank = typeof banks.$inferSelect;
