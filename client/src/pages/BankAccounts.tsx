@@ -17,7 +17,7 @@ import { Wallet, Plus } from "lucide-react";
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
 
-type Bank = { id: string; code: string; name: string; shortName?: string | null; slug?: string | null; color?: string | null };
+type Bank = { id: string; code: string; name: string; shortName?: string | null; slug?: string | null; color?: string | null; logoUrl?: string | null };
 function bankIconClass(b: Bank): string | undefined {
   const byCode: Record<string, string> = {
     "001": "ibb-banco-brasil",
@@ -78,6 +78,9 @@ export default function BankAccounts() {
   const [saving, setSaving] = React.useState<boolean>(false);
   const [info, setInfo] = React.useState<string>("");
   const [bankQuery, setBankQuery] = React.useState<string>("");
+  const [logoErrorByCode, setLogoErrorByCode] = React.useState<Record<string, boolean>>({});
+  const [logoSrcByCode, setLogoSrcByCode] = React.useState<Record<string, string>>({});
+  const [accountType, setAccountType] = React.useState<string>("");
 
   React.useEffect(() => {
     fetch("/api/banks")
@@ -106,7 +109,7 @@ export default function BankAccounts() {
       return "Conta";
     })();
     const finalName = name || bankLabel;
-    const payload = { name: finalName, type: "bank", balance: parseMoney(balance).toFixed(2) } as any;
+    const payload = { name: finalName, type: (accountType || "Corrente"), balance: parseMoney(balance).toFixed(2) } as any;
     try {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
@@ -124,6 +127,7 @@ export default function BankAccounts() {
       setBalance("");
       setSelectedBank("");
       setBankOther("");
+      setAccountType("");
     } catch {
       setInfo("Erro de rede");
       setSaving(false);
@@ -141,6 +145,31 @@ export default function BankAccounts() {
   });
 
   const selectedObj = banks.find((x) => x.code === selectedBank);
+
+  React.useEffect(() => {
+    const code = selectedObj?.code;
+    if (!code) return;
+    setLogoErrorByCode((prev) => {
+      const next = { ...prev };
+      delete next[code];
+      return next;
+    });
+    (async () => {
+      try {
+        if (!selectedObj?.logoUrl) return;
+        const r = await fetch(`/api/logo/${code}`);
+        if (!r.ok) {
+          setLogoErrorByCode((prev) => ({ ...prev, [code]: true }));
+          return;
+        }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        setLogoSrcByCode((prev) => ({ ...prev, [code]: url }));
+      } catch {
+        setLogoErrorByCode((prev) => ({ ...prev, [code]: true }));
+      }
+    })();
+  }, [selectedObj?.code]);
 
   return (
     <Layout>
@@ -171,10 +200,10 @@ export default function BankAccounts() {
                 <Label htmlFor="bank" className="text-right">Banco</Label>
                 <div className="col-span-3">
                   <div className="flex items-center gap-2 mb-2">
-                    {selectedBank && bankIconClass(selectedObj as Bank) ? (
-                      <span className={`${bankIconClass(selectedObj as Bank)} text-xl`}></span>
-                    ) : selectedBank && (selectedObj?.logoUrl) ? (
-                      <img src={(selectedObj as any).logoUrl} alt="Logo" className="w-5 h-5 rounded-sm" />
+                    {selectedBank && selectedObj && logoSrcByCode[selectedObj.code] && !logoErrorByCode[selectedObj.code] ? (
+                      <img src={logoSrcByCode[selectedObj.code]} alt="Logo" className="w-5 h-5 rounded-sm" />
+                    ) : selectedBank && bankIconClass(selectedObj as Bank) ? (
+                      <span className={`${bankIconClass(selectedObj as Bank)} text-xl`} style={{ color: (selectedObj?.color || "#333") }}></span>
                     ) : selectedBank && selectedObj?.color ? (
                       <span className="inline-block w-5 h-5 rounded-sm" style={{ backgroundColor: selectedObj.color }} />
                     ) : null}
@@ -184,15 +213,13 @@ export default function BankAccounts() {
                     <SelectTrigger>
                       <SelectValue placeholder={banks.length ? "Selecione o banco" : "Carregando bancos..."} />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-72 overflow-y-auto">
                       <SelectItem value="other">Outro</SelectItem>
                       {filteredBanks.map((b) => (
-                        <SelectItem key={b.id} value={b.code}>
+                        <SelectItem key={b.id} value={b.code} className="cursor-pointer">
                           <div className="flex items-center gap-2">
                             {bankIconClass(b) ? (
-                              <span className={`${bankIconClass(b)} text-base`}></span>
-                            ) : b.logoUrl ? (
-                              <img src={b.logoUrl} alt="Logo" className="w-4 h-4 rounded-sm" />
+                              <span className={`${bankIconClass(b)} text-base`} style={{ color: (b.color || "#333") }}></span>
                             ) : (
                               <span className="inline-block w-4 h-4 rounded-sm" style={{ backgroundColor: b.color || "#999" }} />
                             )}
@@ -214,7 +241,18 @@ export default function BankAccounts() {
               ) : null}
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="type" className="text-right">Tipo</Label>
-                <Input id="type" placeholder="Corrente, Poupança" className="col-span-3" />
+                <div className="col-span-3">
+                  <Select value={accountType} onValueChange={setAccountType}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Corrente" className="cursor-pointer">Corrente</SelectItem>
+                      <SelectItem value="Poupança" className="cursor-pointer">Poupança</SelectItem>
+                      <SelectItem value="Investimento" className="cursor-pointer">Investimento</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="balance" className="text-right">Saldo inicial</Label>

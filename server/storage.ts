@@ -36,16 +36,26 @@ export class MemStorage implements IStorage {
   constructor() {
     this.users = new Map();
     this._banks = [
-      { id: "bb", code: "001", name: "Banco do Brasil", shortName: "BB", slug: "banco-do-brasil", color: "#ffcc00", logoUrl: "https://logo.clearbit.com/bancodobrasil.com.br" },
-      { id: "itau", code: "341", name: "Itaú Unibanco", shortName: "Itaú", slug: "itau", color: "#ff6600", logoUrl: "https://logo.clearbit.com/itau.com.br" },
+      { id: "bb", code: "001", name: "Banco do Brasil", shortName: "BB", slug: "banco-do-brasil", color: "#ffcc00", logoUrl: "https://cdn.jsdelivr.net/gh/Tgentil/Bancos-em-SVG@main/Banco%20do%20Brasil%20S.A/banco-do-brasil-sem-fundo.svg" },
       { id: "bradesco", code: "237", name: "Bradesco", shortName: "Bradesco", slug: "bradesco", color: "#cc0000", logoUrl: "https://logo.clearbit.com/bradesco.com.br" },
+      { id: "itau", code: "341", name: "Itaú Unibanco", shortName: "Itaú", slug: "itau", color: "#ff6600", logoUrl: "https://logo.clearbit.com/itau.com.br" },
       { id: "santander", code: "033", name: "Santander", shortName: "Santander", slug: "santander", color: "#c8102e", logoUrl: "https://logo.clearbit.com/santander.com.br" },
       { id: "caixa", code: "104", name: "Caixa", shortName: "Caixa", slug: "caixa", color: "#0b63ce", logoUrl: "https://logo.clearbit.com/caixa.gov.br" },
       { id: "nubank", code: "260", name: "Nubank", shortName: "Nubank", slug: "nubank", color: "#8309fd", logoUrl: "https://logo.clearbit.com/nubank.com.br" },
       { id: "inter", code: "077", name: "Banco Inter", shortName: "Inter", slug: "inter", color: "#ff6e00", logoUrl: "https://logo.clearbit.com/inter.co" },
       { id: "btg", code: "208", name: "BTG Pactual", shortName: "BTG", slug: "btg", color: "#001e3c", logoUrl: "https://logo.clearbit.com/btg.com.br" },
       { id: "c6", code: "336", name: "C6 Bank", shortName: "C6", slug: "c6", color: "#000000", logoUrl: "https://logo.clearbit.com/c6bank.com.br" },
-      { id: "sicredi", code: "748", name: "Sicredi", shortName: "Sicredi", slug: "sicredi", color: "#39a935", logoUrl: "https://logo.clearbit.com/sicredi.com.br" }
+      { id: "sicredi", code: "748", name: "Sicredi", shortName: "Sicredi", slug: "sicredi", color: "#39a935", logoUrl: "https://logo.clearbit.com/sicredi.com.br" },
+      { id: "sicoob", code: "756", name: "Sicoob", shortName: "Sicoob", slug: "sicoob", color: "#0b5d2b", logoUrl: null },
+      { id: "banrisul", code: "041", name: "Banrisul", shortName: "Banrisul", slug: "banrisul", color: "#1e90ff", logoUrl: null },
+      { id: "safra", code: "422", name: "Banco Safra", shortName: "Safra", slug: "safra", color: "#0a1a2b", logoUrl: "https://logo.clearbit.com/safra.com.br" },
+      { id: "original", code: "212", name: "Banco Original", shortName: "Original", slug: "original", color: "#00c853", logoUrl: "https://logo.clearbit.com/bancooriginal.com.br" },
+      { id: "pan", code: "623", name: "Banco PAN", shortName: "PAN", slug: "pan", color: "#0076ff", logoUrl: "https://logo.clearbit.com/bancopan.com.br" },
+      { id: "bmg", code: "318", name: "BMG", shortName: "BMG", slug: "bmg", color: "#ff6e00", logoUrl: "https://logo.clearbit.com/bmg.com.br" },
+      { id: "mercantil", code: "389", name: "Banco Mercantil do Brasil", shortName: "Mercantil", slug: "mercantil", color: "#003399", logoUrl: "https://logo.clearbit.com/mercantildobrasil.com.br" },
+      { id: "daycoval", code: "707", name: "Banco Daycoval", shortName: "Daycoval", slug: "daycoval", color: "#1a4f8b", logoUrl: "https://logo.clearbit.com/daycoval.com.br" },
+      { id: "xp", code: "102", name: "XP Investimentos", shortName: "XP", slug: "xp", color: "#000000", logoUrl: "https://logo.clearbit.com/xp.com.br" },
+      { id: "bv", code: "655", name: "Banco Votorantim (BV)", shortName: "BV", slug: "bv", color: "#00a651", logoUrl: "https://logo.clearbit.com/bv.com.br" }
     ];
     this._accounts = new Map();
     this._categories = new Map();

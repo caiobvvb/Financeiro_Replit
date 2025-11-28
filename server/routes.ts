@@ -30,10 +30,10 @@ export async function registerRoutes(
   });
 
   app.post("/api/auth/login", (req: Request, res: Response, next) => {
-    passport.authenticate("local", (err, user) => {
+    passport.authenticate("local", (err: any, user: any) => {
       if (err) return next(err);
       if (!user) return res.status(401).json({ message: "Invalid credentials" });
-      req.logIn(user, (e) => {
+      req.logIn(user, (e: any) => {
         if (e) return next(e);
         res.json(user);
       });
@@ -154,6 +154,23 @@ export async function registerRoutes(
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
     await storage.deleteTransaction(req.params.id);
     res.json({ ok: true });
+  });
+  app.get("/api/logo/:code", async (req: Request, res: Response) => {
+    try {
+      const code = req.params.code;
+      const banks = await storage.listBanks();
+      const bank = banks.find((b) => (b.code || "") === code);
+      if (!bank || !bank.logoUrl) return res.status(404).end();
+      const r = await fetch(bank.logoUrl);
+      if (!r.ok) return res.status(502).end();
+      const ct = r.headers.get("content-type") || "image/svg+xml";
+      res.setHeader("Content-Type", ct);
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      const buf = Buffer.from(await r.arrayBuffer());
+      res.end(buf);
+    } catch {
+      res.status(500).end();
+    }
   });
   return httpServer;
 }
