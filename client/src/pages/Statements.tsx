@@ -9,22 +9,53 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { cn } from "@/lib/utils";
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { computeStatement, formatBRL } from "@/lib/billing";
-import { Home, Car, Utensils, Wallet, TrendingUp, Briefcase, ShoppingCart, CreditCard, Fuel, Phone, Wifi, FileText, Gift, DollarSign, Coins, PiggyBank, Banknote, Bus, School, Heart, Stethoscope, Dumbbell, Pill, PlayCircle, Tv, Bike, Hammer, Wrench, Edit2, Trash2, Minus } from "lucide-react";
+import { Home, Car, Utensils, Wallet, TrendingUp, Briefcase, ShoppingCart, CreditCard, Fuel, Phone, Wifi, FileText, Gift, DollarSign, Coins, PiggyBank, Banknote, Bus, School, Heart, Stethoscope, Dumbbell, Pill, PlayCircle, Tv, Bike, Hammer, Wrench, Edit2, Trash2, Minus, Filter, Download, Plus, Calendar, BarChart3 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { toast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
-import { ButtonGroup } from "@/components/ui/button-group";
 
 type CreditCardRow = { id: string; user_id: string; name: string; limit_amount: number; due_day: number; close_day: number; brand: string };
 type StatementRow = { id: string; user_id: string; credit_card_id: string; year: number; month: number; status: string; total_amount: number; paid_amount: number; close_date: string; due_date: string };
 type TxRow = { id: string; date: string; description?: string | null; category_id: string; amount: number; installment_count?: number | null; installment_number?: number | null; ignored?: boolean | null };
 type Category = { id: string; name: string; icon?: string | null; color?: string | null };
 
+function BrandIcon({ brand, className }: { brand: string; className?: string }) {
+  const b = (brand || "").toLowerCase();
+  if (b === "mastercard") {
+    return (
+      <svg viewBox="0 0 48 24" className={className}><circle cx="16" cy="12" r="9" fill="#EB001B" /><circle cx="32" cy="12" r="9" fill="#F79E1B" opacity="0.9" /></svg>
+    );
+  }
+  if (b === "visa") {
+    return (
+      <svg viewBox="0 0 48 24" className={className}><rect width="48" height="24" fill="#0A1F44" /><text x="24" y="16" fontSize="10" fill="#FFFFFF" textAnchor="middle" fontFamily="Arial">VISA</text></svg>
+    );
+  }
+  if (b === "amex") {
+    return (
+      <svg viewBox="0 0 48 24" className={className}><rect width="48" height="24" fill="#2E77BB" /><text x="24" y="16" fontSize="9" fill="#FFFFFF" textAnchor="middle" fontFamily="Arial">AMEX</text></svg>
+    );
+  }
+  if (b === "elo") {
+    return (
+      <svg viewBox="0 0 48 24" className={className}><circle cx="12" cy="12" r="5" fill="#000" /><circle cx="24" cy="12" r="5" fill="#FFD400" /><circle cx="36" cy="12" r="5" fill="#E60000" /></svg>
+    );
+  }
+  if (b === "hipercard") {
+    return (
+      <svg viewBox="0 0 48 24" className={className}><rect width="48" height="24" rx="4" fill="#9D0B0B" /><text x="24" y="16" fontSize="8" fill="#FFFFFF" textAnchor="middle" fontFamily="Arial">HIPERCARD</text></svg>
+    );
+  }
+  return <div className={className}></div>;
+}
+
 export default function StatementsPage() {
   const [, params] = useRoute("/faturas/:cardId");
+  const [, setLocation] = useLocation();
   const cardId = params?.cardId || "";
+  const [allCards, setAllCards] = React.useState<CreditCardRow[]>([]);
   const [card, setCard] = React.useState<CreditCardRow | null>(null);
   const today = new Date();
   const [year, setYear] = React.useState(today.getFullYear());
@@ -38,12 +69,6 @@ export default function StatementsPage() {
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [selectedCats, setSelectedCats] = React.useState<string[]>([]);
-  const leftListRef = React.useRef<HTMLDivElement | null>(null);
-  const firstItemRef = React.useRef<HTMLDivElement | null>(null);
-  const firstTitleRef = React.useRef<HTMLDivElement | null>(null);
-  const rightColRef = React.useRef<HTMLDivElement | null>(null);
-  const [rightOffset, setRightOffset] = React.useState(0);
-  const RIGHT_SHIFT = 12;
   const [tagsByTx, setTagsByTx] = React.useState<Record<string, string[]>>({});
   const [editOpen, setEditOpen] = React.useState(false);
   const [editTx, setEditTx] = React.useState<TxRow | null>(null);
@@ -65,38 +90,18 @@ export default function StatementsPage() {
   const [editStmtError, setEditStmtError] = React.useState<string>("");
 
   React.useEffect(() => { fetchAll(); }, [cardId, year, month]);
-  React.useLayoutEffect(() => {
-    const left = leftListRef.current;
-    const title = firstTitleRef.current;
-    const first = firstItemRef.current;
-    if (left && (title || first)) {
-      const l = left.getBoundingClientRect();
-      const base = (title || first)!.getBoundingClientRect();
-      setRightOffset((base.top - l.top) + RIGHT_SHIFT);
-    } else {
-      setRightOffset(0);
-    }
-    function onResize() {
-      const l2 = leftListRef.current;
-      const t2 = firstTitleRef.current;
-      const f2 = firstItemRef.current;
-      if (l2 && (t2 || f2)) {
-        const lr = l2.getBoundingClientRect();
-        const br = (t2 || f2)!.getBoundingClientRect();
-        setRightOffset((br.top - lr.top) + RIGHT_SHIFT);
-      }
-    }
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [txs, selectedCats, selectedTags, search]);
 
   async function fetchAll() {
     if (!cardId) return;
     setLoading(true);
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) { setLoading(false); return; }
-    const { data: cards } = await supabase.from("credit_cards").select("id,user_id,name,limit_amount,due_day,close_day,brand").eq("id", cardId).limit(1);
-    const cc = (cards?.[0] || null) as any;
+
+    // Fetch all cards
+    const { data: allCardsData } = await supabase.from("credit_cards").select("id,user_id,name,limit_amount,due_day,close_day,brand").order("name");
+    setAllCards((allCardsData || []) as any);
+
+    const cc = (allCardsData || []).find((c: any) => c.id === cardId) || null;
     setCard(cc);
     if (!cc) { setLoading(false); return; }
     // ensure statement
@@ -109,7 +114,7 @@ export default function StatementsPage() {
       .limit(1);
     let stmt = st?.[0] as any;
     if (!stmt) {
-      const ref = computeStatement(cc, new Date(year, month - 1, cc.close_day).toISOString().slice(0,10));
+      const ref = computeStatement(cc, new Date(year, month - 1, cc.close_day).toISOString().slice(0, 10));
       const payload = {
         user_id: userData.user.id,
         credit_card_id: cardId,
@@ -118,8 +123,8 @@ export default function StatementsPage() {
         status: "open",
         total_amount: 0,
         paid_amount: 0,
-        close_date: ref.cycle_end.toISOString().slice(0,10),
-        due_date: ref.statement_due.toISOString().slice(0,10)
+        close_date: ref.cycle_end.toISOString().slice(0, 10),
+        due_date: ref.statement_due.toISOString().slice(0, 10)
       } as any;
       const { data: created } = await supabase.from("statements").insert(payload).select();
       stmt = created?.[0] as any;
@@ -136,13 +141,13 @@ export default function StatementsPage() {
     setTxs((txdata || []) as any);
     const { data: t } = await supabase.from("tags").select("id,name").order("name");
     setTags(t || []);
-    const { data: cats } = await supabase.from("categories").select("id,name,icon,color").eq("type","expense");
-    setCategories((cats||[]) as any);
-    const ids = (txdata || []).map((r:any)=>r.id);
+    const { data: cats } = await supabase.from("categories").select("id,name,icon,color").eq("type", "expense");
+    setCategories((cats || []) as any);
+    const ids = (txdata || []).map((r: any) => r.id);
     if (ids.length) {
       const { data: tt } = await supabase.from("transaction_tags").select("transaction_id,tag_id").in("transaction_id", ids);
       const map: Record<string, string[]> = {};
-      (tt||[]).forEach((row:any)=>{ map[row.transaction_id] = [...(map[row.transaction_id]||[]), row.tag_id]; });
+      (tt || []).forEach((row: any) => { map[row.transaction_id] = [...(map[row.transaction_id] || []), row.tag_id]; });
       setTagsByTx(map);
     } else {
       setTagsByTx({});
@@ -170,7 +175,7 @@ export default function StatementsPage() {
     if (!amount || amount <= 0) return;
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
-    const { error } = await supabase.from("statement_payments").insert({ user_id: userData.user.id, statement_id: statement.id, amount, date: new Date().toISOString().slice(0,10) });
+    const { error } = await supabase.from("statement_payments").insert({ user_id: userData.user.id, statement_id: statement.id, amount, date: new Date().toISOString().slice(0, 10) });
     if (error) { toast({ title: "Erro ao pagar fatura", description: "Tente novamente", variant: "destructive" }); return; }
     await fetchAll();
     setPayOpen(false);
@@ -207,7 +212,7 @@ export default function StatementsPage() {
 
   async function saveEditStatement() {
     if (!statement) return;
-    const allowed = ['open','closed','paid'];
+    const allowed = ['open', 'closed', 'paid'];
     const st = allowed.includes(editStatus) ? editStatus : 'open';
     const cd = editCloseDate;
     const dd = editDueDate;
@@ -215,11 +220,11 @@ export default function StatementsPage() {
     const closeDateObj = new Date(cd);
     const dueDateObj = new Date(dd);
     if (!(closeDateObj < dueDateObj)) { toast({ title: "Datas inconsistentes", description: "Fechamento deve ser anterior ao vencimento", variant: "destructive" }); return; }
-    const cMonth = closeDateObj.getMonth()+1, cYear = closeDateObj.getFullYear();
+    const cMonth = closeDateObj.getMonth() + 1, cYear = closeDateObj.getFullYear();
     if (cMonth !== month || cYear !== year) { toast({ title: "Fechamento no mês errado", description: "Ajuste para o mês/ano da fatura", variant: "destructive" }); return; }
-    const expectedDueMonth = month === 12 ? 1 : month+1;
-    const expectedDueYear = month === 12 ? year+1 : year;
-    const dMonth = dueDateObj.getMonth()+1, dYear = dueDateObj.getFullYear();
+    const expectedDueMonth = month === 12 ? 1 : month + 1;
+    const expectedDueYear = month === 12 ? year + 1 : year;
+    const dMonth = dueDateObj.getMonth() + 1, dYear = dueDateObj.getFullYear();
     if (dMonth !== expectedDueMonth || dYear !== expectedDueYear) { toast({ title: "Vencimento fora do ciclo", description: "Deve ser no mês seguinte", variant: "destructive" }); return; }
     if (card?.close_day && closeDateObj.getDate() !== Number(card.close_day)) { toast({ title: "Dia de fechamento divergente", description: `Esperado ${card.close_day}`, variant: "destructive" }); return; }
     if (card?.due_day && dueDateObj.getDate() !== Number(card.due_day)) { toast({ title: "Dia de vencimento divergente", description: `Esperado ${card.due_day}`, variant: "destructive" }); return; }
@@ -239,11 +244,11 @@ export default function StatementsPage() {
     const closeDateObj = new Date(cd);
     const dueDateObj = new Date(dd);
     if (!(closeDateObj < dueDateObj)) { setEditStmtError("Fechamento deve ser anterior ao vencimento"); return; }
-    const cMonth = closeDateObj.getMonth()+1, cYear = closeDateObj.getFullYear();
+    const cMonth = closeDateObj.getMonth() + 1, cYear = closeDateObj.getFullYear();
     if (cMonth !== month || cYear !== year) { setEditStmtError("Fechamento deve estar no mês/ano da fatura"); return; }
-    const expectedDueMonth = month === 12 ? 1 : month+1;
-    const expectedDueYear = month === 12 ? year+1 : year;
-    const dMonth = dueDateObj.getMonth()+1, dYear = dueDateObj.getFullYear();
+    const expectedDueMonth = month === 12 ? 1 : month + 1;
+    const expectedDueYear = month === 12 ? year + 1 : year;
+    const dMonth = dueDateObj.getMonth() + 1, dYear = dueDateObj.getFullYear();
     if (dMonth !== expectedDueMonth || dYear !== expectedDueYear) { setEditStmtError("Vencimento deve ser no mês seguinte"); return; }
     if (card?.close_day && closeDateObj.getDate() !== Number(card.close_day)) { setEditStmtError(`Dia de fechamento deve ser ${card.close_day}`); return; }
     if (card?.due_day && dueDateObj.getDate() !== Number(card.due_day)) { setEditStmtError(`Dia de vencimento deve ser ${card.due_day}`); return; }
@@ -251,34 +256,34 @@ export default function StatementsPage() {
   }, [editCloseDate, editDueDate, month, year, card]);
 
   function exportCsv() {
-    const tagName = new Map((tags||[]).map((t:any)=>[t.id,t.name]));
-    const rows = txs.filter(txMatchesFilters).map((t)=>{
-      const c = categories.find((x)=>x.id===t.category_id);
-      const tagStr = (tagsByTx[t.id]||[]).map((id)=>tagName.get(id)||'').join('|');
-      const parcela = (t.installment_count && t.installment_count>1) ? `${t.installment_number}/${t.installment_count}` : '';
-      return [t.date, t.description||'', c?.name||'', tagStr, parcela, Number(t.amount).toFixed(2)];
+    const tagName = new Map((tags || []).map((t: any) => [t.id, t.name]));
+    const rows = txs.filter(txMatchesFilters).map((t) => {
+      const c = categories.find((x) => x.id === t.category_id);
+      const tagStr = (tagsByTx[t.id] || []).map((id) => tagName.get(id) || '').join('|');
+      const parcela = (t.installment_count && t.installment_count > 1) ? `${t.installment_number}/${t.installment_count}` : '';
+      return [t.date, t.description || '', c?.name || '', tagStr, parcela, Number(t.amount).toFixed(2)];
     });
-    let csv = 'Data,Descrição,Categoria,Tags,Parcelamento,Valor\n' + rows.map((r)=> r.map((s)=> '"'+String(s).replace(/"/g,'""')+'"').join(',')).join('\n');
+    let csv = 'Data,Descrição,Categoria,Tags,Parcelamento,Valor\n' + rows.map((r) => r.map((s) => '"' + String(s).replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `fatura-${card?.name || cardId}-${year}-${String(month).padStart(2,'0')}.csv`;
+    a.download = `fatura-${card?.name || cardId}-${year}-${String(month).padStart(2, '0')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   function txMatchesFilters(t: TxRow) {
     const catOk = selectedCats.length ? selectedCats.includes(t.category_id) : true;
-    const tagOk = selectedTags.length ? (tagsByTx[t.id]||[]).some((id)=>selectedTags.includes(id)) : true;
-    const searchOk = search ? (t.description||"").toLowerCase().includes(search.toLowerCase()) : true;
+    const tagOk = selectedTags.length ? (tagsByTx[t.id] || []).some((id) => selectedTags.includes(id)) : true;
+    const searchOk = search ? (t.description || "").toLowerCase().includes(search.toLowerCase()) : true;
     return catOk && tagOk && searchOk;
   }
 
   function openEdit(t: TxRow) {
     setEditTx(t);
     setEditMode("single");
-    setEditAmountStr(formatMoneyInput(String(Math.abs(Number(t.amount||0)*100)).replace(/\D/g, "")));
+    setEditAmountStr(formatMoneyInput(String(Math.abs(Number(t.amount || 0) * 100)).replace(/\D/g, "")));
     setEditDesc(t.description || "");
     setBulkTotalStr("");
     setEditCategoryId(t.category_id);
@@ -298,10 +303,10 @@ export default function StatementsPage() {
       if (editDesc.trim()) payload.description = editDesc.trim();
       await supabase.from("transactions").update(payload).eq("id", editTx.id);
       const current = tagsByTx[editTx.id] || [];
-      const toAdd = editTags.filter((id)=> !current.includes(id));
-      const toRemove = current.filter((id)=> !editTags.includes(id));
+      const toAdd = editTags.filter((id) => !current.includes(id));
+      const toRemove = current.filter((id) => !editTags.includes(id));
       if (toAdd.length) {
-        await supabase.from("transaction_tags").insert(toAdd.map((tagId)=> ({ transaction_id: editTx.id, tag_id: tagId })));
+        await supabase.from("transaction_tags").insert(toAdd.map((tagId) => ({ transaction_id: editTx.id, tag_id: tagId })));
       }
       if (toRemove.length) {
         for (const tagId of toRemove) {
@@ -322,10 +327,10 @@ export default function StatementsPage() {
         .eq("description", tx.description || null)
         .eq("installment_count", tx.installment_count || 1)
         .gte("installment_number", tx.installment_number || 1);
-      const list = (rows||[]).sort((a:any,b:any)=>Number(a.installment_number)-Number(b.installment_number));
-      for (let i=0;i<list.length;i++) {
+      const list = (rows || []).sort((a: any, b: any) => Number(a.installment_number) - Number(b.installment_number));
+      for (let i = 0; i < list.length; i++) {
         const row = list[i];
-        const amount = (i === list.length-1) ? remainder : per;
+        const amount = (i === list.length - 1) ? remainder : per;
         await supabase.from("transactions").update({ amount }).eq("id", row.id);
       }
     }
@@ -352,242 +357,337 @@ export default function StatementsPage() {
 
   return (
     <Layout>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">Fatura</h1>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setMonth((m) => (m === 1 ? (setYear((y)=>y-1), 12) : m-1))}>{"<"}</Button>
-            <div className="px-3 py-1 rounded-full border text-sm">{monthLabel(year, month)}</div>
-            <Button variant="outline" onClick={() => setMonth((m) => (m === 12 ? (setYear((y)=>y+1), 1) : m+1))}>{">"}</Button>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Fatura {card?.name}</h1>
+            <p className="text-muted-foreground">Gerencie suas faturas e despesas.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-white rounded-lg border p-1 shadow-sm">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMonth((m) => (m === 1 ? (setYear((y) => y - 1), 12) : m - 1))}>{"<"}</Button>
+              <div className="px-2 text-sm font-medium min-w-[140px] text-center capitalize">{monthLabel(year, month)}</div>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setMonth((m) => (m === 12 ? (setYear((y) => y + 1), 1) : m + 1))}>{">"}</Button>
+            </div>
+            <Input placeholder="Buscar..." className="w-full md:w-64" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Input placeholder="Buscar descrição" className="w-56" value={search} onChange={(e)=>setSearch(e.target.value)} />
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <ButtonGroup>
-              <Button onClick={() => setPayOpen(true)}>Pagamento</Button>
-              <Button variant="outline" onClick={openEditStatement}>Editar Fatura</Button>
-              <Button variant="outline" onClick={()=>{ const d = new Date(); const qs = new URLSearchParams({ add: "1", card: cardId, date: d.toISOString().slice(0,10) }); location.href = `/accounts?${qs.toString()}`; }}>Adicionar Despesa</Button>
-              <Button variant="outline" onClick={exportCsv}>Exportar CSV</Button>
-            </ButtonGroup>
-            <Collapsible>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" className="h-8">Filtros</Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="mt-3 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Categorias:</span>
-                    {categories.map((c)=> (
-                      <Toggle key={c.id} pressed={selectedCats.includes(c.id)} onPressedChange={(on)=>setSelectedCats((prev)=> on ? [...prev,c.id] : prev.filter((x)=>x!==c.id))} className="h-7 px-2 text-xs border rounded data-[state=on]:bg-emerald-500 data-[state=on]:text-white">{c.name}</Toggle>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-muted-foreground">Tags:</span>
-                    {tags.map((t)=> (
-                      <Toggle key={t.id} pressed={selectedTags.includes(t.id)} onPressedChange={(on)=>setSelectedTags((prev)=> on ? [...prev,t.id] : prev.filter((x)=>x!==t.id))} className="h-7 px-2 text-xs border rounded data-[state=on]:bg-emerald-500 data-[state=on]:text-white">{t.name}</Toggle>
-                    ))}
-                    <Button variant="ghost" className="h-7 text-xs" onClick={()=>{ setSelectedTags([]); setSelectedCats([]); setSearch(''); }}>Limpar filtros</Button>
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
-          <div ref={leftListRef} className="space-y-3">
-            {txs.filter(txMatchesFilters).map((t, i) => (
-              <div ref={i===0 ? firstItemRef : undefined}>
-                <Card key={t.id} className="border-none shadow-sm">
-                <CardContent className="p-4 grid grid-cols-[1fr_auto] items-start gap-3">
-                  <div className="flex items-start gap-3">
-                    <div>
-                      <div ref={i===0 ? firstTitleRef : undefined} className="text-sm font-medium text-foreground flex items-center gap-2">
-                        <span>{t.description || "Sem descrição"}</span>
-                        {t.installment_count && t.installment_count > 1 ? (
-                          <span className="px-2 py-0.5 rounded-full bg-muted text-xs text-muted-foreground">
-                            {t.installment_number}/{t.installment_count}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-2">
-                        <span>{t.date}</span>
-                        <span>•</span>
-                        {(() => {
-                          const c = categories.find((x)=>x.id===t.category_id);
-                          return (
-                            <span className="flex items-center gap-1">
-                              <IconByName name={c?.icon} color={c?.color || undefined} className="w-4 h-4" />
-                              {c?.name || "-"}
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-24 sm:w-28 md:w-32 text-right">
-                      <div className="font-mono font-semibold text-red-600 leading-none">{formatBRL(Number(t.amount))}</div>
-                    </div>
-                    <div className="flex items-center gap-2 h-8 mt-[2px]">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(t)}>
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-amber-600" onClick={async () => { const { error } = await supabase.from("transactions").update({ ignored: true }).eq("id", t.id); if (error) toast({ title: "Erro ao ignorar", variant: "destructive" }); else { toast({ title: "Transação ignorada" }); await fetchAll(); } }}>
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={async () => { const { error } = await supabase.from("transactions").delete().eq("id", t.id); if (error) toast({ title: "Erro ao excluir", variant: "destructive" }); else { toast({ title: "Transação excluída" }); await fetchAll(); } }}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              </div>
-            ))}
-            {txs.length === 0 ? (
-              <Card className="border-none shadow-sm">
-                <CardContent className="p-6 text-sm text-muted-foreground">Sem despesas neste período</CardContent>
-              </Card>
-            ) : null}
-          </div>
-        </div>
-        <div ref={rightColRef} style={{ marginTop: rightOffset }} className="flex flex-col gap-4">
-          <Card className="border-none shadow-sm"><CardContent className="p-4"><div className="text-sm text-muted-foreground">Valor da fatura</div><div className="text-2xl font-bold">{formatBRL(Number(totalAmount))}</div></CardContent></Card>
-          <Card className="border-none shadow-sm"><CardContent className="p-4"><div className="text-sm text-muted-foreground">Valor pago</div><div className="text-2xl font-bold text-emerald-600">{formatBRL(Number(statement?.paid_amount || 0))}</div></CardContent></Card>
-          <Card className="border-none shadow-sm"><CardContent className="p-4"><div className="text-sm text-muted-foreground">Saldo pendente</div><div className="text-2xl font-bold text-red-600">{formatBRL(Math.max(0, Number(totalAmount) - Number(statement?.paid_amount || 0)))}</div></CardContent></Card>
-          <Card className="border-none shadow-sm"><CardContent className="p-4"><div className="text-sm text-muted-foreground">Status</div><div className="text-lg font-semibold">{statement?.status === 'paid' ? 'Fatura paga' : statement?.status === 'closed' ? 'Fatura fechada' : 'Fatura aberta'}</div></CardContent></Card>
-          <Card className="border-none shadow-sm"><CardContent className="p-4"><div className="text-sm text-muted-foreground">Dia de fechamento</div><div className="text-lg">{statement?.close_date || '-'}</div></CardContent></Card>
-          <Card className="border-none shadow-sm"><CardContent className="p-4"><div className="text-sm text-muted-foreground">Data vencimento</div><div className="text-lg">{statement?.due_date || '-'}</div></CardContent></Card>
-        </div>
-      </div>
-
-      <Dialog open={payOpen} onOpenChange={setPayOpen}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader><DialogTitle>Pagamento da fatura</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label className="text-right">Valor</Label>
-              <Input className="col-span-3" value={payAmountStr} onChange={(e)=>setPayAmountStr(formatMoneyInput(e.target.value))} disabled={payFull} />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label className="text-right">Total</Label>
-              <div className="col-span-3 text-sm">{formatBRL(Number(statement?.total_amount || 0))}</div>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label className="text-right">Pago</Label>
-              <div className="col-span-3 text-sm">{formatBRL(Number(statement?.paid_amount || 0))}</div>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label className="text-right">Pagar tudo</Label>
-              <input type="checkbox" checked={payFull} onChange={(e)=>setPayFull(e.target.checked)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={payStatement}>Confirmar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-[520px]">
-          <DialogHeader><DialogTitle>Editar despesa</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label className="text-right">Modo</Label>
-              <div className="col-span-3 flex items-center gap-3">
-                <Toggle pressed={editMode==='single'} onPressedChange={()=>setEditMode('single')} className="h-7 px-2 text-xs border rounded data-[state=on]:bg-emerald-500 data-[state=on]:text-white">Apenas esta</Toggle>
-                <Toggle pressed={editMode==='bulk'} onPressedChange={()=>setEditMode('bulk')} className="h-7 px-2 text-xs border rounded data-[state=on]:bg-emerald-500 data-[state=on]:text-white">Esta e futuras</Toggle>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label className="text-right">Categoria</Label>
-              <div className="col-span-3">
-                <Select value={editCategoryId} onValueChange={setEditCategoryId}>
-                  <SelectTrigger>
-                    <div className="flex items-center gap-2 w-full">
-                      {(() => { const c = categories.find((x)=>x.id===editCategoryId); return c ? <IconByName name={c.icon} color={c.color||undefined} className="w-4 h-4" /> : null; })()}
-                      <SelectValue placeholder="Selecione" />
-                    </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="border-none shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex-1 min-w-0 mr-2">
+                <p className="text-sm font-medium text-muted-foreground mb-1">Cartão Atual</p>
+                <Select value={cardId} onValueChange={(v) => setLocation(`/faturas/${v}`)}>
+                  <SelectTrigger className="w-full border-none shadow-none p-0 h-auto text-2xl font-bold focus:ring-0 px-0">
+                    <SelectValue>{card?.name}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((c)=> (
+                    {allCards.map((c) => (
                       <SelectPrimitive.Item key={c.id} value={c.id} className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground">
-                        <div className="flex items-center gap-2"><IconByName name={c.icon} color={c.color||undefined} className="w-4 h-4" /><SelectPrimitive.ItemText>{c.name}</SelectPrimitive.ItemText></div>
+                        <div className="flex items-center gap-2">
+                          <BrandIcon brand={c.brand} className="w-8 h-4" />
+                          <SelectPrimitive.ItemText>{c.name}</SelectPrimitive.ItemText>
+                        </div>
                         <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><SelectPrimitive.ItemIndicator /></span>
                       </SelectPrimitive.Item>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              <div className="w-12 h-8 flex items-center justify-center shrink-0">
+                <BrandIcon brand={card?.brand || ""} className="w-full h-full" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Valor da Fatura</p>
+                <h2 className="text-2xl font-bold text-foreground">{formatBRL(Number(totalAmount))}</h2>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-foreground">
+                <FileText className="w-5 h-5" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Valor Pago</p>
+                <h2 className="text-2xl font-bold text-emerald-600">{formatBRL(Number(statement?.paid_amount || 0))}</h2>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600">
+                <Wallet className="w-5 h-5" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-md hover:shadow-lg transition-all duration-300">
+            <CardContent className="p-6">
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-sm font-medium text-muted-foreground">Status</p>
+                <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full capitalize",
+                  statement?.status === 'paid' ? "bg-emerald-100 text-emerald-700" :
+                    statement?.status === 'closed' ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700")}>
+                  {statement?.status === 'paid' ? 'Paga' : statement?.status === 'closed' ? 'Fechada' : 'Aberta'}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Fechamento:</span>
+                  <span className="font-medium">{statement?.close_date ? new Date(statement.close_date).toLocaleDateString('pt-BR') : '-'}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Vencimento:</span>
+                  <span className="font-medium">{statement?.due_date ? new Date(statement.due_date).toLocaleDateString('pt-BR') : '-'}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setPayOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <DollarSign className="w-4 h-4 mr-2" />
+              Pagar Fatura
+            </Button>
+            <Button variant="outline" onClick={() => { const d = new Date(); const qs = new URLSearchParams({ add: "1", card: cardId, date: d.toISOString().slice(0, 10) }); location.href = `/accounts?${qs.toString()}`; }}>
+              <Plus className="w-4 h-4 mr-2" />
+              Despesa
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setLocation(`/faturas/${cardId}/overview`)}>
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Visão Geral
+            </Button>
+            <Button variant="ghost" size="sm" onClick={openEditStatement}>
+              <Calendar className="w-4 h-4 mr-2" />
+              Alterar Datas
+            </Button>
+            <Button variant="ghost" size="sm" onClick={exportCsv}>
+              <Download className="w-4 h-4 mr-2" />
+              CSV
+            </Button>
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <Filter className="w-4 h-4 mr-2" />
+                  Filtros
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="absolute right-0 mt-2 z-10 bg-white p-4 rounded-lg shadow-xl border w-80">
+                <div className="space-y-4">
+                  <div>
+                    <span className="text-sm font-medium mb-2 block">Categorias</span>
+                    <div className="flex flex-wrap gap-1">
+                      {categories.map((c) => (
+                        <Toggle key={c.id} pressed={selectedCats.includes(c.id)} onPressedChange={(on) => setSelectedCats((prev) => on ? [...prev, c.id] : prev.filter((x) => x !== c.id))} className="h-6 px-2 text-[10px] border rounded-full data-[state=on]:bg-emerald-500 data-[state=on]:text-white">{c.name}</Toggle>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium mb-2 block">Tags</span>
+                    <div className="flex flex-wrap gap-1">
+                      {tags.map((t) => (
+                        <Toggle key={t.id} pressed={selectedTags.includes(t.id)} onPressedChange={(on) => setSelectedTags((prev) => on ? [...prev, t.id] : prev.filter((x) => x !== t.id))} className="h-6 px-2 text-[10px] border rounded-full data-[state=on]:bg-emerald-500 data-[state=on]:text-white">{t.name}</Toggle>
+                      ))}
+                    </div>
+                  </div>
+                  <Button variant="secondary" size="sm" className="w-full" onClick={() => { setSelectedTags([]); setSelectedCats([]); setSearch(''); }}>Limpar Filtros</Button>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {txs.filter(txMatchesFilters).map((t) => (
+            <Card key={t.id} className="border-none shadow-sm hover:shadow-md transition-all duration-200 group">
+              <CardContent className="p-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: categories.find(c => c.id === t.category_id)?.color || "#f3f4f6" }}>
+                  <IconByName name={categories.find(c => c.id === t.category_id)?.icon} className="w-5 h-5 text-slate-700" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-foreground truncate">{t.description || "Sem descrição"}</h4>
+                    {t.installment_count && t.installment_count > 1 ? (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                        {t.installment_number}/{t.installment_count}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                    <span>{new Date(t.date).toLocaleDateString('pt-BR')}</span>
+                    <span>•</span>
+                    <span>{categories.find(c => c.id === t.category_id)?.name || "Sem categoria"}</span>
+                    {(tagsByTx[t.id] || []).length > 0 && (
+                      <>
+                        <span>•</span>
+                        <div className="flex gap-1">
+                          {(tagsByTx[t.id] || []).map(tid => {
+                            const tag = tags.find(tg => tg.id === tid);
+                            return tag ? <span key={tid} className="bg-slate-100 px-1 rounded">{tag.name}</span> : null;
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-bold text-red-600">{formatBRL(Number(t.amount))}</div>
+                </div>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(t)}>
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-amber-600" onClick={async () => { const { error } = await supabase.from("transactions").update({ ignored: true }).eq("id", t.id); if (error) toast({ title: "Erro ao ignorar", variant: "destructive" }); else { toast({ title: "Transação ignorada" }); await fetchAll(); } }}>
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={async () => { const { error } = await supabase.from("transactions").delete().eq("id", t.id); if (error) toast({ title: "Erro ao excluir", variant: "destructive" }); else { toast({ title: "Transação excluída" }); await fetchAll(); } }}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          {txs.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-8 h-8 text-slate-400" />
+              </div>
+              <p>Nenhuma despesa encontrada para este período.</p>
             </div>
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label className="text-right">Tags</Label>
-              <div className="col-span-3 flex flex-wrap items-center gap-2">
-                {tags.map((t)=> (
-                  <Toggle key={t.id} pressed={editTags.includes(t.id)} onPressedChange={(on)=> setEditTags((prev)=> on ? [...prev, t.id] : prev.filter((x)=> x!==t.id))} className="h-7 px-2 text-xs border rounded data-[state=on]:bg-emerald-500 data-[state=on]:text-white">{t.name}</Toggle>
-                ))}
+          ) : null}
+        </div>
+
+        <Dialog open={payOpen} onOpenChange={setPayOpen}>
+          <DialogContent className="sm:max-w-[420px]">
+            <DialogHeader><DialogTitle>Pagamento da fatura</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div className="grid grid-cols-4 items-center gap-2">
+                <Label className="text-right">Valor</Label>
+                <Input className="col-span-3" value={payAmountStr} onChange={(e) => setPayAmountStr(formatMoneyInput(e.target.value))} disabled={payFull} />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-2">
+                <Label className="text-right">Total</Label>
+                <div className="col-span-3 text-sm">{formatBRL(Number(statement?.total_amount || 0))}</div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-2">
+                <Label className="text-right">Pago</Label>
+                <div className="col-span-3 text-sm">{formatBRL(Number(statement?.paid_amount || 0))}</div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-2">
+                <Label className="text-right">Pagar tudo</Label>
+                <input type="checkbox" checked={payFull} onChange={(e) => setPayFull(e.target.checked)} />
               </div>
             </div>
-            {editMode==='single' ? (
-              <>
-                <div className="grid grid-cols-4 items-center gap-2">
-                  <Label className="text-right">Valor</Label>
-                  <Input className="col-span-3" value={editAmountStr} onChange={(e)=>setEditAmountStr(formatMoneyInput(e.target.value))} />
+            <DialogFooter>
+              <Button onClick={payStatement}>Confirmar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader><DialogTitle>Editar despesa</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div className="grid grid-cols-4 items-center gap-2">
+                <Label className="text-right">Modo</Label>
+                <div className="col-span-3 flex items-center gap-3">
+                  <Toggle pressed={editMode === 'single'} onPressedChange={() => setEditMode('single')} className="h-7 px-2 text-xs border rounded data-[state=on]:bg-emerald-500 data-[state=on]:text-white">Apenas esta</Toggle>
+                  <Toggle pressed={editMode === 'bulk'} onPressedChange={() => setEditMode('bulk')} className="h-7 px-2 text-xs border rounded data-[state=on]:bg-emerald-500 data-[state=on]:text-white">Esta e futuras</Toggle>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-2">
-                  <Label className="text-right">Descrição</Label>
-                  <Input className="col-span-3" value={editDesc} onChange={(e)=>setEditDesc(e.target.value)} />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="grid grid-cols-4 items-center gap-2">
-                  <Label className="text-right">Total restante</Label>
-                  <Input className="col-span-3" value={bulkTotalStr} onChange={(e)=>setBulkTotalStr(formatMoneyInput(e.target.value))} />
-                </div>
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            <Button onClick={saveEdit} disabled={editSaving}>Salvar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={editStmtOpen} onOpenChange={setEditStmtOpen}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader><DialogTitle>Editar Fatura</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label className="text-right">Status</Label>
-              <div className="col-span-3">
-                <Select value={editStatus} onValueChange={setEditStatus}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectPrimitive.Item value="open" className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground"><SelectPrimitive.ItemText>Aberta</SelectPrimitive.ItemText></SelectPrimitive.Item>
-                    <SelectPrimitive.Item value="closed" className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground"><SelectPrimitive.ItemText>Fechada</SelectPrimitive.ItemText></SelectPrimitive.Item>
-                    <SelectPrimitive.Item value="paid" className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground"><SelectPrimitive.ItemText>Paga</SelectPrimitive.ItemText></SelectPrimitive.Item>
-                  </SelectContent>
-                </Select>
               </div>
+              <div className="grid grid-cols-4 items-center gap-2">
+                <Label className="text-right">Categoria</Label>
+                <div className="col-span-3">
+                  <Select value={editCategoryId} onValueChange={setEditCategoryId}>
+                    <SelectTrigger>
+                      <div className="flex items-center gap-2 w-full">
+                        {(() => { const c = categories.find((x) => x.id === editCategoryId); return c ? <IconByName name={c.icon} color={c.color || undefined} className="w-4 h-4" /> : null; })()}
+                        <SelectValue placeholder="Selecione" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectPrimitive.Item key={c.id} value={c.id} className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground">
+                          <div className="flex items-center gap-2"><IconByName name={c.icon} color={c.color || undefined} className="w-4 h-4" /><SelectPrimitive.ItemText>{c.name}</SelectPrimitive.ItemText></div>
+                          <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><SelectPrimitive.ItemIndicator /></span>
+                        </SelectPrimitive.Item>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-2">
+                <Label className="text-right">Tags</Label>
+                <div className="col-span-3 flex flex-wrap items-center gap-2">
+                  {tags.map((t) => (
+                    <Toggle key={t.id} pressed={editTags.includes(t.id)} onPressedChange={(on) => setEditTags((prev) => on ? [...prev, t.id] : prev.filter((x) => x !== t.id))} className="h-7 px-2 text-xs border rounded data-[state=on]:bg-emerald-500 data-[state=on]:text-white">{t.name}</Toggle>
+                  ))}
+                </div>
+              </div>
+              {editMode === 'single' ? (
+                <>
+                  <div className="grid grid-cols-4 items-center gap-2">
+                    <Label className="text-right">Valor</Label>
+                    <Input className="col-span-3" value={editAmountStr} onChange={(e) => setEditAmountStr(formatMoneyInput(e.target.value))} />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-2">
+                    <Label className="text-right">Descrição</Label>
+                    <Input className="col-span-3" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-4 items-center gap-2">
+                    <Label className="text-right">Total restante</Label>
+                    <Input className="col-span-3" value={bulkTotalStr} onChange={(e) => setBulkTotalStr(formatMoneyInput(e.target.value))} />
+                  </div>
+                </>
+              )}
             </div>
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label className="text-right">Fechamento</Label>
-              <Input type="date" className="col-span-3" value={editCloseDate} onChange={(e)=>setEditCloseDate(e.target.value)} />
+            <DialogFooter>
+              <Button onClick={saveEdit} disabled={editSaving}>Salvar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={editStmtOpen} onOpenChange={setEditStmtOpen}>
+          <DialogContent className="sm:max-w-[420px]">
+            <DialogHeader><DialogTitle>Editar Fatura</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div className="grid grid-cols-4 items-center gap-2">
+                <Label className="text-right">Status</Label>
+                <div className="col-span-3">
+                  <Select value={editStatus} onValueChange={setEditStatus}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectPrimitive.Item value="open" className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground"><SelectPrimitive.ItemText>Aberta</SelectPrimitive.ItemText></SelectPrimitive.Item>
+                      <SelectPrimitive.Item value="closed" className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground"><SelectPrimitive.ItemText>Fechada</SelectPrimitive.ItemText></SelectPrimitive.Item>
+                      <SelectPrimitive.Item value="paid" className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground"><SelectPrimitive.ItemText>Paga</SelectPrimitive.ItemText></SelectPrimitive.Item>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-2">
+                <Label className="text-right">Fechamento</Label>
+                <Input type="date" className="col-span-3" value={editCloseDate} onChange={(e) => setEditCloseDate(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-2">
+                <Label className="text-right">Vencimento</Label>
+                <Input type="date" className="col-span-3" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
+              </div>
+              {editStmtError ? <div className="text-xs text-red-600">{editStmtError}</div> : null}
             </div>
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label className="text-right">Vencimento</Label>
-              <Input type="date" className="col-span-3" value={editDueDate} onChange={(e)=>setEditDueDate(e.target.value)} />
-            </div>
-            {editStmtError ? <div className="text-xs text-red-600">{editStmtError}</div> : null}
-          </div>
-          <DialogFooter>
-            <Button onClick={saveEditStatement} disabled={!!editStmtError}>Salvar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button onClick={saveEditStatement} disabled={!!editStmtError}>Salvar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </Layout>
   );
 }
