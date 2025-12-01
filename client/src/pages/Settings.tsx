@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { User, Bell, Shield, Globe, Moon } from "lucide-react";
+import { User, Bell, Shield, Globe, Moon, Tags as TagsIcon } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -14,6 +14,10 @@ export default function Settings() {
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
+  const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [editingTagName, setEditingTagName] = useState("");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -23,6 +27,12 @@ export default function Settings() {
         const meta: any = u.user_metadata || {};
         setName(meta.name || "");
       }
+    });
+  }, []);
+
+  useEffect(() => {
+    supabase.from("tags").select("id,name").order("name").then(({ data }) => {
+      setTags((data || []).map((t: any) => ({ id: t.id, name: t.name })));
     });
   }, []);
 
@@ -121,8 +131,8 @@ export default function Settings() {
                 </CardContent>
             </Card>
 
-            {/* Notifications Section */}
-            <Card className="border-none shadow-sm">
+        {/* Notifications Section */}
+        <Card className="border-none shadow-sm">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Bell className="w-5 h-5 text-primary" />
@@ -153,8 +163,74 @@ export default function Settings() {
                         <Switch />
                     </div>
                 </CardContent>
-            </Card>
+        </Card>
+
+        {/* Tags Section */}
+        <div id="tags">
+          <Card className="border-none shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TagsIcon className="w-5 h-5 text-primary" />
+                Tags
+              </CardTitle>
+              <CardDescription>Gerencie suas tags para organizar transações.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Nova tag</Label>
+                <div className="col-span-3 flex gap-2">
+                  <Input className="flex-1" value={newTag} onChange={(e) => setNewTag(e.target.value)} />
+                  <Button onClick={async () => {
+                    const v = newTag.trim();
+                    if (!v) return;
+                    const { data: userData } = await supabase.auth.getUser();
+                    if (!userData.user) return;
+                    const { data, error } = await supabase.from("tags").insert({ user_id: userData.user.id, name: v }).select();
+                    if (!error && data && data[0]) {
+                      setTags((prev) => [...prev, { id: data[0].id, name: data[0].name }]);
+                      setNewTag("");
+                    }
+                  }}>Adicionar</Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {tags.map((t) => (
+                  <div key={t.id} className="flex items-center justify-between p-2 rounded-md border">
+                    {editingTagId === t.id ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <Input className="flex-1" value={editingTagName} onChange={(e) => setEditingTagName(e.target.value)} />
+                        <Button variant="outline" onClick={() => { setEditingTagId(null); setEditingTagName(""); }}>Cancelar</Button>
+                        <Button onClick={async () => {
+                          const name = editingTagName.trim();
+                          if (!name) return;
+                          const { error } = await supabase.from("tags").update({ name }).eq("id", t.id);
+                          if (!error) {
+                            setTags((prev) => prev.map((x) => (x.id === t.id ? { ...x, name } : x)));
+                            setEditingTagId(null);
+                            setEditingTagName("");
+                          }
+                        }}>Salvar</Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{t.name}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" className="text-muted-foreground" onClick={() => { setEditingTagId(t.id); setEditingTagName(t.name); }}>Editar</Button>
+                      <Button variant="ghost" className="text-destructive" onClick={async () => {
+                        const { error } = await supabase.from("tags").delete().eq("id", t.id);
+                        if (!error) setTags((prev) => prev.filter((x) => x.id !== t.id));
+                      }}>Excluir</Button>
+                    </div>
+                  </div>
+                ))}
+                {tags.length === 0 ? <div className="text-sm text-muted-foreground">Nenhuma tag cadastrada</div> : null}
+              </div>
+            </CardContent>
+          </Card>
         </div>
+      </div>
 
         {/* Account Status/Plan */}
         <div>

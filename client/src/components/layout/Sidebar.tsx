@@ -9,6 +9,7 @@ import {
   LogOut,
   List,
   Tags,
+  Tag as TagIcon,
   Calendar,
   Wallet
 } from "lucide-react";
@@ -21,6 +22,7 @@ const sidebarItems = [
   { icon: Wallet, label: "Contas Bancárias", href: "/contas" },
   { icon: PieChart, label: "Relatórios", href: "/reports" },
   { icon: Tags, label: "Categorias", href: "/categories" },
+  { icon: TagIcon, label: "Tags", href: "/tags" },
   { icon: Settings, label: "Configurações", href: "/settings" },
 ];
 

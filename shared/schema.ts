@@ -20,6 +20,7 @@ export type User = typeof users.$inferSelect;
 export const accounts = pgTable("accounts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
+  bankId: varchar("bank_id"),
   name: text("name").notNull(),
   type: text("type").notNull(),
   balance: numeric("balance", { precision: 20, scale: 2 }).default("0"),
@@ -27,6 +28,7 @@ export const accounts = pgTable("accounts", {
 
 export const insertAccountSchema = createInsertSchema(accounts).pick({
   userId: true,
+  bankId: true,
   name: true,
   type: true,
   balance: true,

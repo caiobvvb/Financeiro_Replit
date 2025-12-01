@@ -13,9 +13,21 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Wallet, Plus } from "lucide-react";
+import { Wallet, Plus, Edit2, Trash2 } from "lucide-react";
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
+import { useLocation } from "wouter";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type Bank = { id: string; code: string; name: string; shortName?: string | null; slug?: string | null; color?: string | null; logoUrl?: string | null };
 function bankIconClass(b: Bank): string | undefined {
@@ -69,6 +81,8 @@ function bankIconClass(b: Bank): string | undefined {
   return undefined;
 }
 
+type Account = { id: string; name: string; balance: number | string; bankId?: string | null; type: string };
+
 export default function BankAccounts() {
   const [banks, setBanks] = React.useState<Bank[]>([]);
   const [selectedBank, setSelectedBank] = React.useState<string>("");
@@ -80,7 +94,46 @@ export default function BankAccounts() {
   const [bankQuery, setBankQuery] = React.useState<string>("");
   const [logoErrorByCode, setLogoErrorByCode] = React.useState<Record<string, boolean>>({});
   const [logoSrcByCode, setLogoSrcByCode] = React.useState<Record<string, string>>({});
+  const [accounts, setAccounts] = React.useState<Account[]>([]);
   const [accountType, setAccountType] = React.useState<string>("");
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [, setLocation] = useLocation();
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editId, setEditId] = React.useState<string>("");
+  const [editName, setEditName] = React.useState<string>("");
+  const [editType, setEditType] = React.useState<string>("");
+  const [editBankId, setEditBankId] = React.useState<string | null>(null);
+  const [editBalance, setEditBalance] = React.useState<string>("");
+  const [editHasTx, setEditHasTx] = React.useState<boolean>(false);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
+
+  async function fetchAccounts() {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        setAccounts([]);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("id,name,balance,bank_id,type")
+        .order("name", { ascending: true });
+      if (error || !data) {
+        setAccounts([]);
+        return;
+      }
+      const normalized = data.map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        balance: Number(a.balance ?? 0),
+        bankId: a.bank_id ?? null,
+        type: a.type ?? "Corrente",
+      })) as Account[];
+      setAccounts(normalized);
+    } catch {
+      setAccounts([]);
+    }
+  }
 
   React.useEffect(() => {
     fetch("/api/banks")
@@ -91,6 +144,12 @@ export default function BankAccounts() {
       .catch(() => {
         setBanks([]);
       });
+
+    fetchAccounts();
+  }, []);
+
+  React.useEffect(() => {
+    setBalance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(0));
   }, []);
 
   function parseMoney(v: string): number {
@@ -99,24 +158,47 @@ export default function BankAccounts() {
     return isNaN(n) ? 0 : n;
   }
 
+  function formatBalanceInput(value: string): string {
+    const digits = value.replace(/\D/g, "");
+    const num = parseInt(digits || "0", 10);
+    const val = (num / 100);
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
+  }
+
   async function saveAccount() {
     setSaving(true);
     setInfo("");
     const bankLabel = (() => {
-      const b = banks.find((x) => x.code === selectedBank);
+      const b = banks.find((x) => x.id === selectedBank);
       if (b) return b.shortName || b.name;
       if (selectedBank === "other" && bankOther) return bankOther;
       return "Conta";
     })();
     const finalName = name || bankLabel;
-    const payload = { name: finalName, type: (accountType || "Corrente"), balance: parseMoney(balance).toFixed(2) } as any;
+    const payload = {
+      name: finalName,
+      type: accountType || "Corrente",
+      balance: parseMoney(balance),
+      bank_id: selectedBank === "other" ? null : selectedBank,
+    } as any;
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      const res = await fetch("/api/accounts", { method: "POST", headers, body: JSON.stringify(payload) });
-      if (!res.ok) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        setInfo("Necessário autenticar");
+        setSaving(false);
+        return;
+      }
+      const userId = userData.user.id;
+      const { error } = await supabase
+        .from("accounts")
+        .insert({
+          user_id: userId,
+          name: payload.name,
+          type: payload.type,
+          balance: payload.balance,
+          bank_id: payload.bank_id,
+        });
+      if (error) {
         setInfo("Não foi possível salvar");
         setSaving(false);
         return;
@@ -124,13 +206,80 @@ export default function BankAccounts() {
       setInfo("Conta criada");
       setSaving(false);
       setName("");
-      setBalance("");
+      setBalance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(0));
       setSelectedBank("");
       setBankOther("");
       setAccountType("");
+      setDialogOpen(false);
+      setLocation("/contas");
+      fetchAccounts();
     } catch {
       setInfo("Erro de rede");
       setSaving(false);
+    }
+  }
+
+  function openEdit(acc: Account) {
+    setEditId(acc.id);
+    setEditName(acc.name);
+    setEditType(acc.type || "Corrente");
+    setEditBankId(acc.bankId ?? null);
+    setEditBalance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(acc.balance || 0)));
+    setEditOpen(true);
+    (async () => {
+      const { count } = await supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("account_id", acc.id);
+      setEditHasTx((count || 0) > 0);
+    })();
+  }
+
+  async function updateAccount() {
+    try {
+      const updatePayload: any = { name: editName, type: editType, bank_id: editBankId };
+      if (!editHasTx) {
+        updatePayload.balance = parseMoney(editBalance);
+      }
+      const { error } = await supabase
+        .from("accounts")
+        .update(updatePayload)
+        .eq("id", editId);
+      if (error) return;
+      setEditOpen(false);
+      fetchAccounts();
+    } catch {}
+  }
+
+  async function canDeleteAccount(id: string): Promise<boolean> {
+    const { count, error } = await supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", id);
+    if (error) return false;
+    return (count || 0) === 0;
+  }
+
+  async function deleteAccount(id: string) {
+    try {
+      const ok = await canDeleteAccount(id);
+      if (!ok) {
+        setInfo("Conta possui transações vinculadas");
+        setDeletingId(null);
+        return;
+      }
+      const { error } = await supabase.from("accounts").delete().eq("id", id);
+      if (error) {
+        setInfo("Não foi possível excluir");
+        setDeletingId(null);
+        return;
+      }
+      setInfo("");
+      setDeletingId(null);
+      fetchAccounts();
+    } catch {
+      setInfo("Erro de rede");
+      setDeletingId(null);
     }
   }
 
@@ -144,7 +293,7 @@ export default function BankAccounts() {
     );
   });
 
-  const selectedObj = banks.find((x) => x.code === selectedBank);
+  const selectedObj = banks.find((x) => x.id === selectedBank);
 
   React.useEffect(() => {
     const code = selectedObj?.code;
@@ -179,7 +328,7 @@ export default function BankAccounts() {
           <p className="text-muted-foreground">Gerencie suas contas correntes e poupanças.</p>
         </div>
 
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20">
               <Plus className="w-4 h-4 mr-2" />
@@ -216,7 +365,7 @@ export default function BankAccounts() {
                     <SelectContent className="max-h-72 overflow-y-auto">
                       <SelectItem value="other">Outro</SelectItem>
                       {filteredBanks.map((b) => (
-                        <SelectItem key={b.id} value={b.code} className="cursor-pointer">
+                        <SelectItem key={b.id} value={b.id} className="cursor-pointer">
                           <div className="flex items-center gap-2">
                             {bankIconClass(b) ? (
                               <span className={`${bankIconClass(b)} text-base`} style={{ color: (b.color || "#333") }}></span>
@@ -256,7 +405,13 @@ export default function BankAccounts() {
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="balance" className="text-right">Saldo inicial</Label>
-                <Input id="balance" placeholder="R$ 0,00" className="col-span-3" value={balance} onChange={(e) => setBalance(e.target.value)} />
+                <Input
+                  id="balance"
+                  placeholder="R$ 0,00"
+                  className="col-span-3"
+                  value={balance}
+                  onChange={(e) => setBalance(formatBalanceInput(e.target.value))}
+                />
               </div>
             </div>
             <DialogFooter>
@@ -272,7 +427,11 @@ export default function BankAccounts() {
           <CardContent className="p-6 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-1">Saldo Total</p>
-              <h2 className="text-3xl font-bold text-primary">R$ 7.850,00</h2>
+              <h2 className="text-3xl font-bold text-primary">
+                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                  (Array.isArray(accounts) ? accounts : []).reduce((acc, curr) => acc + Number(curr.balance), 0)
+                )}
+              </h2>
             </div>
             <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-primary">
               <Wallet className="w-6 h-6" />
@@ -282,32 +441,134 @@ export default function BankAccounts() {
       </div>
 
       <div className="space-y-4">
-        <Card className="border-none shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer">
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-lg bg-purple-600 flex items-center justify-center text-white font-bold">Nu</div>
-            <div className="flex-1">
-              <h4 className="font-bold text-foreground">Conta Corrente</h4>
-              <p className="text-sm text-muted-foreground">Nubank</p>
-            </div>
-            <div className="text-right">
-              <p className="font-bold text-lg">R$ 5.720,50</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-none shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer">
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-lg bg-orange-500 flex items-center justify-center text-white font-bold">It</div>
-            <div className="flex-1">
-              <h4 className="font-bold text-foreground">Poupança</h4>
-              <p className="text-sm text-muted-foreground">Itaú</p>
-            </div>
-            <div className="text-right">
-              <p className="font-bold text-lg">R$ 2.129,50</p>
-            </div>
-          </CardContent>
-        </Card>
+        {(Array.isArray(accounts) ? accounts : []).map((account) => {
+          const bank = banks.find((b) => b.id === account.bankId);
+          return (
+            <Card key={account.id} className="border-none shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer">
+              <CardContent className="p-6 flex items-center gap-4">
+                <div
+                  className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
+                  style={{ backgroundColor: bank?.color || "#999" }}
+                >
+                  {bank ? (
+                    bankIconClass(bank) ? (
+                      <span className={`${bankIconClass(bank)} text-2xl text-white`}></span>
+                    ) : (
+                      (bank.shortName || bank.name).substring(0, 2)
+                    )
+                  ) : (
+                    "Ct"
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-bold text-foreground">{account.name}</h4>
+                  <p className="text-sm text-muted-foreground">{bank?.name || "Banco não informado"}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-lg">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(account.balance))}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(account)}>
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeletingId(account.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir conta?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Só é possível excluir contas sem transações vinculadas.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setDeletingId(null)}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deleteAccount(account.id)}>Excluir</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Editar Conta</DialogTitle>
+            <DialogDescription>Atualize as informações da conta.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit_name" className="text-right">Nome</Label>
+              <Input id="edit_name" className="col-span-3" value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit_type" className="text-right">Tipo</Label>
+              <div className="col-span-3">
+                <Select value={editType} onValueChange={setEditType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Corrente" className="cursor-pointer">Corrente</SelectItem>
+                    <SelectItem value="Poupança" className="cursor-pointer">Poupança</SelectItem>
+                    <SelectItem value="Investimento" className="cursor-pointer">Investimento</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit_balance" className="text-right">Saldo</Label>
+              <div className="col-span-3">
+                <Input
+                  id="edit_balance"
+                  placeholder="R$ 0,00"
+                  value={editBalance}
+                  onChange={(e) => setEditBalance(formatBalanceInput(e.target.value))}
+                  disabled={editHasTx}
+                />
+                {editHasTx ? (
+                  <p className="mt-1 text-xs text-muted-foreground">Não é possível editar o saldo com transações vinculadas.</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit_bank" className="text-right">Banco</Label>
+              <div className="col-span-3">
+                <Select value={editBankId ?? ""} onValueChange={(v) => setEditBankId(v === "none" ? null : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o banco" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72 overflow-y-auto">
+                    <SelectItem value="none">Nenhum</SelectItem>
+                    {banks.map((b) => (
+                      <SelectItem key={b.id} value={b.id} className="cursor-pointer">
+                        {(b.shortName || b.name) + (b.code ? ` (${b.code})` : "")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={updateAccount}>Salvar alterações</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
