@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, GripVertical, Home, Car, Utensils, Wallet, TrendingUp, Briefcase, Edit2, Archive, ArchiveRestore, Trash2, ChevronDown, ChevronRight, ShoppingCart, CreditCard, Fuel, Phone, Wifi, FileText, Gift, DollarSign, Coins, PiggyBank, Banknote, Bus, School, Heart, Stethoscope, Dumbbell, Pill, PlayCircle, Tv, Bike, Hammer, Wrench } from "lucide-react";
+import { Plus, GripVertical, Edit2, Archive, ArchiveRestore, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { IconByName } from "@/components/ui/icon-by-name";
 import { cn } from "@/lib/utils";
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
@@ -13,12 +14,7 @@ import { supabase } from "@/lib/supabase";
 type Category = { id: string; userId: string; name: string; type: string; description?: string | null; icon?: string | null; color?: string | null; archived?: boolean | null };
 type Subcategory = { id: string; userId: string; categoryId: string; name: string; description?: string | null; icon?: string | null; color?: string | null; archived?: boolean | null };
 
-const iconMap: Record<string, React.ComponentType<any>> = { Home, Car, Utensils, Wallet, TrendingUp, Briefcase, ShoppingCart, CreditCard, Fuel, Phone, Wifi, FileText, Gift, DollarSign, Coins, PiggyBank, Banknote, Bus, School, Heart, Stethoscope, Dumbbell, Pill, PlayCircle, Tv, Bike, Hammer, Wrench };
-function IconByName({ name, className }: { name?: string | null; className?: string }) {
-  const key = (name || "").trim();
-  const Comp = iconMap[key] || Utensils;
-  return <Comp className={className} />;
-}
+
 
 export default function Categories() {
   const [activeTab, setActiveTab] = React.useState("expenses");
@@ -261,7 +257,7 @@ export default function Categories() {
     { key: "School", label: "Educação" },
     { key: "Dumbbell", label: "Academia" },
     { key: "Pill", label: "Farmácia" },
-    { key: "ShoppingCart", label: "Supermercado" },
+    { key: "ShoppingBasket", label: "Supermercado" },
     { key: "Tv", label: "TV/Streaming" },
     { key: "Hammer", label: "Reforma" },
     { key: "Wrench", label: "Ferramentas" },
@@ -310,18 +306,18 @@ export default function Categories() {
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right">Ícone</Label>
-                  <div className="col-span-3 flex gap-2 flex-wrap">
+                  <div className="col-span-3 grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-2">
                     {iconChoices.map(({ key, label }) => (
                       <button
                         key={key}
                         type="button"
-                        className={cn("flex items-center gap-2 px-3 py-2 rounded-md border", iconName === key ? "border-primary text-primary" : "border-border text-muted-foreground")}
+                        className={cn("flex items-center gap-2 px-3 py-2 rounded-md border text-left hover:bg-accent transition-colors", iconName === key ? "border-primary text-primary bg-primary/5" : "border-border text-muted-foreground")}
                         onClick={() => setIconName(key)}
                         aria-label={label}
                         title={label}
                       >
-                        <IconByName name={key} className="w-4 h-4" />
-                        <span className="text-xs">{label}</span>
+                        <IconByName name={key} className="w-8 h-8 shrink-0" />
+                        <span className="text-xs truncate">{label}</span>
                       </button>
                     ))}
                   </div>
@@ -364,8 +360,8 @@ export default function Categories() {
                     <div key={cat.id} className="p-4 rounded-xl border bg-white border-border/50 hover:border-primary/30 transition-all select-none">
                       <div className="flex items-center gap-4">
                         <GripVertical className="w-5 h-5 text-muted-foreground/40" />
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center mr-2" style={{ backgroundColor: cat.color || "#fde68a" }}>
-                          <IconByName name={cat.icon} className="w-5 h-5" />
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center mr-2 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                          <IconByName name={cat.icon} className="w-8 h-8" />
                         </div>
                         <div className="flex-1">
                           <h4 className="font-bold text-sm flex items-center gap-2">{cat.name} {cat.archived ? <span className="text-xs px-2 py-0.5 rounded bg-muted">Arquivada</span> : null} {collapsedCats.has(cat.id) && ((subCountByCat[cat.id] || (subsByCat[cat.id]?.length || 0)) > 0) ? <span className="text-xs px-2 py-0.5 rounded bg-muted">{(subCountByCat[cat.id] || (subsByCat[cat.id]?.length || 0))}</span> : null}</h4>
@@ -492,8 +488,8 @@ export default function Categories() {
                     <div key={cat.id} className="p-4 rounded-xl border bg-white border-border/50 hover:border-primary/30 transition-all select-none">
                       <div className="flex items-center gap-4">
                         <GripVertical className="w-5 h-5 text-muted-foreground/40" />
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center mr-2" style={{ backgroundColor: cat.color || "#d1fae5" }}>
-                          <IconByName name={cat.icon} className="w-5 h-5" />
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center mr-2 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                          <IconByName name={cat.icon} className="w-8 h-8" />
                         </div>
                         <div className="flex-1">
                           <h4 className="font-bold text-sm flex items-center gap-2">{cat.name} {cat.archived ? <span className="text-xs px-2 py-0.5 rounded bg-muted">Arquivada</span> : null} {collapsedCats.has(cat.id) && ((subCountByCat[cat.id] || (subsByCat[cat.id]?.length || 0)) > 0) ? <span className="text-xs px-2 py-0.5 rounded bg-muted">{(subCountByCat[cat.id] || (subsByCat[cat.id]?.length || 0))}</span> : null}</h4>
@@ -606,18 +602,18 @@ export default function Categories() {
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label className="text-right">Ícone</Label>
-                <div className="col-span-3 flex gap-2 flex-wrap">
+                <div className="col-span-3 grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto pr-2">
                   {iconChoices.map(({ key, label }) => (
                     <button
                       key={key}
                       type="button"
-                      className={cn("flex items-center gap-2 px-3 py-2 rounded-md border", editCat.icon === key ? "border-primary text-primary" : "border-border text-muted-foreground")}
+                      className={cn("flex items-center gap-2 px-3 py-2 rounded-md border text-left hover:bg-accent transition-colors", editCat.icon === key ? "border-primary text-primary bg-primary/5" : "border-border text-muted-foreground")}
                       onClick={() => setEditCat({ ...editCat, icon: key })}
                       aria-label={label}
                       title={label}
                     >
-                      <IconByName name={key} className="w-4 h-4" />
-                      <span className="text-xs">{label}</span>
+                      <IconByName name={key} className="w-8 h-8 shrink-0" />
+                      <span className="text-xs truncate">{label}</span>
                     </button>
                   ))}
                 </div>
