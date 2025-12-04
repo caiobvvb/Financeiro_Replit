@@ -228,7 +228,7 @@ export default function BankAccounts() {
     setEditOpen(true);
     (async () => {
       const { count } = await supabase
-        .from("transactions")
+        .from("bank_transactions")
         .select("id", { count: "exact", head: true })
         .eq("account_id", acc.id);
       setEditHasTx((count || 0) > 0);
@@ -253,7 +253,7 @@ export default function BankAccounts() {
 
   async function canDeleteAccount(id: string): Promise<boolean> {
     const { count, error } = await supabase
-      .from("transactions")
+      .from("bank_transactions")
       .select("id", { count: "exact", head: true })
       .eq("account_id", id);
     if (error) return false;
