@@ -11,7 +11,7 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Wallet, Plus, CreditCard, Home, Car, Utensils, TrendingUp, Briefcase, ShoppingCart, Fuel, Phone, Wifi, FileText, Gift, DollarSign, Coins, PiggyBank, Banknote, Bus, School, Heart, Stethoscope, Dumbbell, Pill, PlayCircle, Tv, Bike, Hammer, Wrench } from "lucide-react";
+import { Wallet, Plus, CreditCard, Home, Car, Utensils, TrendingUp, Briefcase, ShoppingCart, Fuel, Phone, Wifi, FileText, Gift, DollarSign, Coins, PiggyBank, Banknote, Bus, School, Heart, Stethoscope, Dumbbell, Pill, PlayCircle, Tv, Bike, Hammer, Wrench, CheckCircle, AlertTriangle, CalendarDays } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectContent, SelectValue } from "@/components/ui/select";
 import * as SelectPrimitive from "@radix-ui/react-select";
@@ -21,6 +21,8 @@ import { supabase } from "@/lib/supabase";
 import { Switch } from "@/components/ui/switch";
 import { Toggle } from "@/components/ui/toggle";
 import { useEffect } from "react";
+import { cn } from "@/lib/utils";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 
 type CreditCardRow = { id: string; user_id: string; name: string; limit_amount: number; due_day: number; close_day: number; brand: string };
 
@@ -189,6 +191,7 @@ function BrandCombobox({ value, onChange }: { value: string; onChange: (v: strin
 
 export default function Accounts() {
   const [, setLoc] = useLocation();
+  const today = new Date();
   const [createOpen, setCreateOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [limitStr, setLimitStr] = React.useState("");
@@ -214,6 +217,16 @@ export default function Accounts() {
   const [newTagName, setNewTagName] = React.useState("");
   const [addingTagError, setAddingTagError] = React.useState<string>("");
   const [addingTagLoading, setAddingTagLoading] = React.useState(false);
+  const [year, setYear] = React.useState(today.getFullYear());
+  const [month, setMonth] = React.useState(today.getMonth() + 1);
+  const [creditUsedTotal, setCreditUsedTotal] = React.useState(0);
+  
+  const [loadingSummary, setLoadingSummary] = React.useState(false);
+  const [pendingAllTotal, setPendingAllTotal] = React.useState(0);
+  const [pendingAllByCard, setPendingAllByCard] = React.useState<Record<string, number>>({});
+  const [monthBalanceByCard, setMonthBalanceByCard] = React.useState<Record<string, number>>({});
+  const [statementStatusByCard, setStatementStatusByCard] = React.useState<Record<string, string>>({});
+  const [statementDatesByCard, setStatementDatesByCard] = React.useState<Record<string, { close_date: string; due_date: string }>>({});
 
   React.useEffect(() => {
     setLimitStr(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(0));
@@ -252,6 +265,163 @@ export default function Accounts() {
       setTags(t || []);
     })();
   }, []);
+
+  React.useEffect(() => {
+    (async () => {
+      setLoadingSummary(true);
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) { setCreditUsedTotal(0); setPendingAllByCard({}); setPendingAllTotal(0); setLoadingSummary(false); return; }
+      const { data: txs } = await supabase
+        .from("transactions")
+        .select("id,amount,credit_card_id,ignored,statement_year,statement_month")
+        .eq("statement_year", year)
+        .eq("statement_month", month)
+        .or("ignored.is.false,ignored.is.null");
+      const used = (txs || []).reduce((acc: number, t: any) => acc + Number(t.amount || 0), 0);
+      setCreditUsedTotal(Math.max(0, used));
+      // saldo da fatura do mês por cartão
+      const { data: stmtsMonth } = await supabase
+        .from("statements")
+        .select("credit_card_id,total_amount,paid_amount,year,month,status,close_date,due_date")
+        .eq("year", year)
+        .eq("month", month);
+      const mb: Record<string, number> = {};
+      const sb: Record<string, string> = {};
+      const sd: Record<string, { close_date: string; due_date: string }> = {};
+      (stmtsMonth || []).forEach((s: any) => {
+        const pending = Math.max(0, Number(s.total_amount || 0) - Number(s.paid_amount || 0));
+        mb[s.credit_card_id] = pending;
+        sb[s.credit_card_id] = s.status;
+        sd[s.credit_card_id] = { close_date: s.close_date, due_date: s.due_date };
+      });
+      const stmtCardSet = new Set((stmtsMonth || []).map((s: any) => s.credit_card_id));
+      const { data: txsMonthAll } = await supabase
+        .from("transactions")
+        .select("credit_card_id,amount,ignored,statement_year,statement_month")
+        .eq("statement_year", year)
+        .eq("statement_month", month)
+        .or("ignored.is.false,ignored.is.null");
+      (txsMonthAll || []).forEach((t: any) => {
+        const cid = t.credit_card_id;
+        if (!cid) return;
+        if (!stmtCardSet.has(cid)) {
+          mb[cid] = (mb[cid] || 0) + Number(t.amount || 0);
+        }
+      });
+      cards.forEach((cc) => {
+        if (!stmtCardSet.has(cc.id) && mb[cc.id] !== undefined) {
+          const close = new Date(year, month - 1, Number(cc.close_day || 1));
+          const due = new Date(year, month, Number(cc.due_day || 1));
+          sd[cc.id] = { close_date: close.toISOString().slice(0,10), due_date: due.toISOString().slice(0,10) };
+        }
+      });
+      setMonthBalanceByCard(mb);
+      setStatementStatusByCard(sb);
+      setStatementDatesByCard(sd);
+
+      const cardIds = cards.map((c) => c.id);
+      const byCardAll: Record<string, number> = {};
+      let totalPendingAll = 0;
+      const byCardFromStatements: Record<string, number> = {};
+      let pendingFromStatements = 0;
+      let keySet = new Set<string>();
+      if (cardIds.length) {
+        const { data: stmtsByCards } = await supabase
+          .from("statements")
+          .select("credit_card_id,year,month,status,total_amount,paid_amount")
+          .in("credit_card_id", cardIds)
+          .neq("status", "paid");
+        const { data: stmtsByUser } = await supabase
+          .from("statements")
+          .select("credit_card_id,year,month,status,total_amount,paid_amount,user_id")
+          .eq("user_id", userData.user.id)
+          .neq("status", "paid");
+        const merged = [...(stmtsByCards || []), ...(stmtsByUser || [])];
+        const dedupMap = new Map<string, any>();
+        merged.forEach((s: any) => {
+          const k = `${s.credit_card_id}:${s.year}:${s.month}`;
+          if (!dedupMap.has(k)) dedupMap.set(k, s);
+        });
+        const stmtsAll = Array.from(dedupMap.values());
+        keySet = new Set(stmtsAll.map((s: any) => `${s.credit_card_id}:${s.year}:${s.month}`));
+        stmtsAll.forEach((s: any) => {
+          const pending = Math.max(0, Number(s.total_amount || 0) - Number(s.paid_amount || 0));
+          byCardFromStatements[s.credit_card_id] = (byCardFromStatements[s.credit_card_id] || 0) + pending;
+          pendingFromStatements += pending;
+        });
+        const { data: paidByCards } = await supabase
+          .from("statements")
+          .select("credit_card_id,year,month,status")
+          .in("credit_card_id", cardIds)
+          .eq("status", "paid");
+        const { data: paidByUser } = await supabase
+          .from("statements")
+          .select("credit_card_id,year,month,status,user_id")
+          .eq("user_id", userData.user.id)
+          .eq("status", "paid");
+        const paidMerged = [...(paidByCards || []), ...(paidByUser || [])];
+        const paidSet = new Set(paidMerged.map((s: any) => `${s.credit_card_id}:${s.year}:${s.month}`));
+
+        const { data: txAll } = await supabase
+          .from("transactions")
+          .select("credit_card_id,statement_year,statement_month,amount,ignored")
+          .in("credit_card_id", cardIds)
+          .or("ignored.is.false,ignored.is.null");
+        let pendingFromTx = 0;
+        (txAll || []).forEach((t: any) => {
+          const hasPeriod = t.statement_year != null && t.statement_month != null;
+          const k = hasPeriod ? `${t.credit_card_id}:${t.statement_year}:${t.statement_month}` : "";
+          if (!hasPeriod || !paidSet.has(k)) {
+            const val = Number(t.amount || 0);
+            byCardAll[t.credit_card_id] = (byCardAll[t.credit_card_id] || 0) + val;
+            pendingFromTx += val;
+          }
+        });
+        if (pendingFromTx > 0) {
+          totalPendingAll = pendingFromTx;
+        } else {
+          totalPendingAll = pendingFromStatements;
+          Object.assign(byCardAll, byCardFromStatements);
+        }
+      } else {
+        const { data: stmtsByUserOnly } = await supabase
+          .from("statements")
+          .select("credit_card_id,year,month,status,total_amount,paid_amount,user_id")
+          .eq("user_id", userData.user.id)
+          .neq("status", "paid");
+        (stmtsByUserOnly || []).forEach((s: any) => {
+          const pending = Math.max(0, Number(s.total_amount || 0) - Number(s.paid_amount || 0));
+          byCardFromStatements[s.credit_card_id] = (byCardFromStatements[s.credit_card_id] || 0) + pending;
+          pendingFromStatements += pending;
+        });
+        totalPendingAll = pendingFromStatements;
+        Object.assign(byCardAll, byCardFromStatements);
+      }
+      setPendingAllByCard(byCardAll);
+      setPendingAllTotal(totalPendingAll);
+      setLoadingSummary(false);
+    })();
+  }, [year, month, cards]);
+
+  React.useEffect(() => {
+    let chan: any;
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+      chan = supabase
+        .channel("accounts-summary")
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => { /* refresh */ setMonth((m)=>m); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'statements' }, () => { /* refresh */ setMonth((m)=>m); })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'credit_cards' }, () => { /* refresh */ setMonth((m)=>m); })
+        .subscribe();
+    })();
+    return () => { if (chan) supabase.removeChannel(chan); };
+  }, []);
+
+  function monthLabel(y: number, m: number) {
+    const d = new Date(y, m - 1, 1);
+    return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  }
 
   function formatMoneyInput(value: string): string {
     const digits = value.replace(/\D/g, "");
@@ -430,52 +600,99 @@ export default function Accounts() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card className="border-none shadow-md hover:shadow-lg transition-all duration-300">
-            <CardContent className="p-6 flex items-center justify-between">
-                <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-1">Saldo Total</p>
-                    <h2 className="text-3xl font-bold text-primary">R$ 7.850,00</h2>
-                </div>
-                <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-primary">
-                    <Wallet className="w-6 h-6" />
-                </div>
-            </CardContent>
-        </Card>
-        <Card className="border-none shadow-md hover:shadow-lg transition-all duration-300">
-            <CardContent className="p-6 flex items-center justify-between">
-                <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-1">Crédito Utilizado</p>
-                    <h2 className="text-3xl font-bold text-red-600">R$ 2.340,00</h2>
-                </div>
-                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center text-red-600">
-                    <CreditCard className="w-6 h-6" />
-                </div>
-            </CardContent>
-        </Card>
-        <Card className="border-none shadow-md hover:shadow-lg transition-all duration-300">
-            <CardContent className="p-6 flex items-center justify-between">
-                <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-1">Limite total de crédito</p>
-                    <h2 className="text-3xl font-bold text-emerald-600">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cards.reduce((acc, cc) => acc + Number(cc.limit_amount || 0), 0))}</h2>
-                </div>
-                <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600">
-                    <CreditCard className="w-6 h-6" />
-                </div>
-            </CardContent>
-        </Card>
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setMonth((m) => (m === 1 ? (setYear((y)=>y-1), 12) : m-1))}>{"<"}</Button>
+          <div className="px-3 py-1 rounded-full border text-sm">{monthLabel(year, month)}</div>
+          <Button variant="outline" onClick={() => setMonth((m) => (m === 12 ? (setYear((y)=>y+1), 1) : m+1))}>{">"}</Button>
+        </div>
+        <Button variant="outline" onClick={() => setMonth((m)=>m)}>Atualizar</Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <Card className="border-none shadow-md hover:shadow-lg transition-all duration-300 mb-8">
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Crédito total disponível</p>
+                <h2 className="text-3xl font-bold text-emerald-600">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cards.reduce((acc, cc) => acc + Number(cc.limit_amount || 0), 0))}</h2>
+                <div className="mt-1 text-xs text-muted-foreground">Em aberto (não liquidado): <span className="font-semibold text-amber-600">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(pendingAllTotal)}</span></div>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600">
+                <CreditCard className="w-6 h-6" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Crédito utilizado</p>
+                <h2 className={cn("text-3xl font-bold", pendingAllTotal > 0 ? "text-red-600" : "text-muted-foreground")}>{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(pendingAllTotal)}</h2>
+                <div className="mt-1 text-xs text-muted-foreground">No mês: <span className="font-semibold text-red-600">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(creditUsedTotal)}</span></div>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center text-red-600">
+                <CreditCard className="w-6 h-6" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Saldo calculado</p>
+                <h2 className="text-3xl font-bold text-primary">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.max(0, cards.reduce((acc, cc) => acc + Number(cc.limit_amount || 0), 0) - pendingAllTotal))}</h2>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-primary">
+                <Wallet className="w-6 h-6" />
+              </div>
+            </div>
+          </div>
+          
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
             <h3 className="text-xl font-bold mb-4">Cartões de Crédito</h3>
             <div className="space-y-4">
               {cards.map((cc) => (
-                <Card key={cc.id} className="border-none shadow-sm hover:shadow-md transition-all duration-200 bg-slate-100 dark:bg-slate-900/50">
+                <Card key={cc.id} className="border-none shadow-sm hover:shadow-md transition-all duration-200 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100">
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-6">
                       <div>
-                        <h4 className="font-bold text-foreground">{cc.name}</h4>
+                        <h4 className="font-bold text-foreground flex items-center gap-2">
+                          <span>{cc.name}</span>
+                          <HoverCard>
+                            <HoverCardTrigger asChild>
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-full text-xs cursor-default",
+                                statementStatusByCard[cc.id]
+                                  ? statementStatusByCard[cc.id] === "paid"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : statementStatusByCard[cc.id] === "closed"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-blue-100 text-blue-700"
+                                  : "bg-muted text-muted-foreground"
+                              )}>
+                                {statementStatusByCard[cc.id]
+                                  ? statementStatusByCard[cc.id] === "paid"
+                                    ? "Paga"
+                                    : statementStatusByCard[cc.id] === "closed"
+                                      ? "Fechada"
+                                      : "Aberta"
+                                  : "Sem fatura"}
+                              </span>
+                            </HoverCardTrigger>
+                            <HoverCardContent side="top" align="center">
+                              <div className="space-y-2">
+                                <div className="text-sm font-medium">{monthLabel(year, month)}</div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <CalendarDays className="w-4 h-4" />
+                                  <span>Fechamento: {statementDatesByCard[cc.id]?.close_date ? new Date(statementDatesByCard[cc.id]!.close_date).toLocaleDateString("pt-BR") : "-"}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <CalendarDays className="w-4 h-4" />
+                                  <span>Vencimento: {statementDatesByCard[cc.id]?.due_date ? new Date(statementDatesByCard[cc.id]!.due_date).toLocaleDateString("pt-BR") : "-"}</span>
+                                </div>
+                              </div>
+                            </HoverCardContent>
+                          </HoverCard>
+                        </h4>
                         <div className="w-8 h-5 rounded mt-2 opacity-50 flex items-center justify-center">
                           <BrandIcon brand={cc.brand} className="w-8 h-4" />
                         </div>
@@ -484,14 +701,27 @@ export default function Accounts() {
                         <BrandIcon brand={cc.brand} className="w-10 h-5" />
                       </div>
                     </div>
-                    <div className="mb-2">
-                      <p className="text-xs text-muted-foreground mb-1">Limite</p>
-                      <p className="text-2xl font-bold text-foreground">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(cc.limit_amount || 0))}</p>
+                    <div className="grid grid-cols-[1fr_auto] items-start gap-6 mb-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Limite</p>
+                        <p className="text-2xl font-bold text-foreground">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(cc.limit_amount || 0))}</p>
+                        <p className="text-xs text-muted-foreground">Disponível: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.max(0, Number(cc.limit_amount || 0) - Number(monthBalanceByCard[cc.id] || 0)))}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Fechamento: {cc.close_day}/mês - {statementDatesByCard[cc.id]?.close_date ? new Date(statementDatesByCard[cc.id]!.close_date).toLocaleDateString("pt-BR") : "-"}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground mb-1">Saldo da fatura ({monthLabel(year, month)})</p>
+                        <div className="flex items-center justify-end gap-2">
+                          {(monthBalanceByCard[cc.id] || 0) === 0 ? (
+                            <CheckCircle className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4 text-red-600" />
+                          )}
+                          <p className={cn("text-xl font-semibold", (monthBalanceByCard[cc.id] || 0) === 0 ? "text-emerald-600" : "text-red-600")}>{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(monthBalanceByCard[cc.id] || 0)}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">Vencimento: {cc.due_day}/mês - {statementDatesByCard[cc.id]?.due_date ? new Date(statementDatesByCard[cc.id]!.due_date).toLocaleDateString("pt-BR") : "-"}</p>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Vencimento: {cc.due_day}/mês</span>
-                      <span>Fechamento: {cc.close_day}/mês</span>
-                    </div>
+                    
                     <div className="mt-3 flex justify-end">
                       <Button
                         variant="ghost"
