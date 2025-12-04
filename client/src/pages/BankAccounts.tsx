@@ -17,7 +17,7 @@ import { Wallet, Plus, Edit2, Trash2 } from "lucide-react";
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
 import { useLocation } from "wouter";
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -248,7 +248,7 @@ export default function BankAccounts() {
       if (error) return;
       setEditOpen(false);
       fetchAccounts();
-    } catch {}
+    } catch { }
   }
 
   async function canDeleteAccount(id: string): Promise<boolean> {
@@ -444,7 +444,11 @@ export default function BankAccounts() {
         {(Array.isArray(accounts) ? accounts : []).map((account) => {
           const bank = banks.find((b) => b.id === account.bankId);
           return (
-            <Card key={account.id} className="border-none shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer">
+            <Card
+              key={account.id}
+              className="border-none shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
+              onClick={() => setLocation(`/contas/${account.id}`)}
+            >
               <CardContent className="p-6 flex items-center gap-4">
                 <div
                   className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
@@ -470,7 +474,7 @@ export default function BankAccounts() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(account)}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); openEdit(account); }}>
                     <Edit2 className="w-4 h-4" />
                   </Button>
                   <AlertDialog>
@@ -479,12 +483,12 @@ export default function BankAccounts() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeletingId(account.id)}
+                        onClick={(e) => { e.stopPropagation(); setDeletingId(account.id); }}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </AlertDialogTrigger>
-                    <AlertDialogContent>
+                    <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                       <AlertDialogHeader>
                         <AlertDialogTitle>Excluir conta?</AlertDialogTitle>
                         <AlertDialogDescription>
@@ -492,8 +496,8 @@ export default function BankAccounts() {
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setDeletingId(null)}>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => deleteAccount(account.id)}>Excluir</AlertDialogAction>
+                        <AlertDialogCancel onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={(e) => { e.stopPropagation(); deleteAccount(account.id); }}>Excluir</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>

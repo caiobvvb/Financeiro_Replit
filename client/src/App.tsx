@@ -9,6 +9,7 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Transactions from "@/pages/Transactions";
 import Accounts from "@/pages/Accounts";
+import AccountDetails from "@/pages/AccountDetails";
 import Reports from "@/pages/Reports";
 import Categories from "@/pages/Categories";
 import Settings from "@/pages/Settings";
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/transactions" component={() => <ProtectedRoute component={Transactions} />} />
       <Route path="/accounts" component={() => <ProtectedRoute component={Accounts} />} />
+      <Route path="/contas/:id" component={() => <ProtectedRoute component={AccountDetails} />} />
       <Route path="/contas" component={() => <ProtectedRoute component={BankAccounts} />} />
       <Route path="/reports" component={() => <ProtectedRoute component={Reports} />} />
       <Route path="/categories" component={() => <ProtectedRoute component={Categories} />} />
