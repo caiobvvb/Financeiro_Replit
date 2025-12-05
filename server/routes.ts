@@ -83,7 +83,12 @@ export async function registerRoutes(
     const devUserId = process.env.NODE_ENV !== "production" ? "dev" : undefined;
     const userId = req.user?.id ?? devUserId;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    const parse = insertAccountSchema.safeParse({ ...req.body, userId });
+    const parse = insertAccountSchema.safeParse({
+      ...req.body,
+      userId,
+      overdraftLimit: req.body.overdraftLimit ?? req.body.overdraft_limit,
+      bankId: req.body.bankId ?? req.body.bank_id,
+    });
     if (!parse.success) return res.status(400).json({ message: "Invalid payload" });
     const created = await storage.createAccount(parse.data);
     res.status(201).json(created);
@@ -91,7 +96,12 @@ export async function registerRoutes(
 
   app.put("/api/accounts/:id", async (req: any, res: Response) => {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-    const updated = await storage.updateAccount(req.params.id, req.body);
+    const updateData = {
+      ...req.body,
+      overdraftLimit: req.body.overdraftLimit ?? req.body.overdraft_limit,
+      bankId: req.body.bankId ?? req.body.bank_id,
+    };
+    const updated = await storage.updateAccount(req.params.id, updateData);
     if (!updated) return res.status(404).json({ message: "Not found" });
     res.json(updated);
   });

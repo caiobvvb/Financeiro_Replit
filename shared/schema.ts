@@ -24,6 +24,7 @@ export const accounts = pgTable("accounts", {
   name: text("name").notNull(),
   type: text("type").notNull(),
   balance: numeric("balance", { precision: 20, scale: 2 }).default("0"),
+  overdraftLimit: numeric("overdraft_limit", { precision: 20, scale: 2 }).default("0"),
 });
 
 export const insertAccountSchema = createInsertSchema(accounts).pick({
@@ -32,6 +33,7 @@ export const insertAccountSchema = createInsertSchema(accounts).pick({
   name: true,
   type: true,
   balance: true,
+  overdraftLimit: true,
 });
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type Account = typeof accounts.$inferSelect;
@@ -41,12 +43,16 @@ export const categories = pgTable("categories", {
   userId: varchar("user_id").notNull(),
   name: text("name").notNull(),
   type: text("type").notNull(),
+  icon: text("icon"),
+  color: text("color"),
 });
 
 export const insertCategorySchema = createInsertSchema(categories).pick({
   userId: true,
   name: true,
   type: true,
+  icon: true,
+  color: true,
 });
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;

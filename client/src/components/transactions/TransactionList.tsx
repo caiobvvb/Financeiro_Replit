@@ -119,11 +119,11 @@ export function TransactionList({ transactions, onEdit, onDelete, onConvertToTra
                                     </div>
                                     {tx.tags && tx.tags.length > 0 && (
                                         <div className="flex flex-wrap gap-1">
-                                            {tx.tags.map(tag => (
-                                                <span key={tag} className="px-2 py-1 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                                    {tag}
-                                                </span>
-                                            ))}
+                                            {tx.tags.map((tag, i) => (
+                                        <span key={`${tag}-${i}`} className="px-2 py-1 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                            {tag}
+                                        </span>
+                                    ))}
                                         </div>
                                     )}
                                 </div>

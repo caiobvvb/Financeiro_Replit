@@ -1,0 +1,1 @@
+ALTER TABLE accounts ADD COLUMN overdraft_limit NUMERIC(20, 2) DEFAULT 0;

@@ -208,7 +208,7 @@ export default function Transactions() {
         <div className="flex items-center gap-4 overflow-x-auto pb-4 mb-6 scrollbar-hide">
           <div
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-full border cursor-pointer transition-all whitespace-nowrap min-w-fit",
+              "flex items-center gap-2 px-4 py-1 rounded-full border cursor-pointer transition-all whitespace-nowrap min-w-fit",
               selectedAccountId === null
                 ? "bg-primary text-primary-foreground border-primary shadow-md"
                 : "bg-background hover:bg-muted border-border"
@@ -229,7 +229,7 @@ export default function Transactions() {
               <div
                 key={acc.id}
                 className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-full border cursor-pointer transition-all whitespace-nowrap min-w-fit",
+                  "flex items-center gap-2 px-4 py-1 rounded-full border cursor-pointer transition-all whitespace-nowrap min-w-fit",
                   selectedAccountId === acc.id
                     ? "bg-primary text-primary-foreground border-primary shadow-md"
                     : "bg-background hover:bg-muted border-border"

@@ -164,10 +164,24 @@ export function TransactionForm({
         if (!userData.user) return;
 
         const val = parseAmountToNumber(amount);
-        if (isNaN(val)) return;
+        if (isNaN(val)) {
+            alert("Valor inválido");
+            return;
+        }
 
         const finalAmount = type === "expense" ? -Math.abs(val) : Math.abs(val);
         const tagsArray = tags.split(",").map((t) => t.trim()).filter((t) => t);
+        
+        if (!categoryId) {
+            alert("Selecione uma categoria");
+            return;
+        }
+        
+        if (!accountId || accountId === "none") {
+            alert("Selecione uma conta");
+            return;
+        }
+
         const accountIdValue = accountId === "none" ? null : (accountId || null);
 
         const baseCount = isRecurring && recurrenceCount ? parseInt(recurrenceCount) : 1;
@@ -182,49 +196,84 @@ export function TransactionForm({
             return d.toISOString().slice(0, 10);
         }
 
-        if (initialData) {
-            const payload = {
-                user_id: userData.user.id,
-                description,
-                amount: finalAmount,
-                date: brToISO(dateBr),
-                category_id: categoryId,
-                account_id: accountIdValue,
-                tags: tagsArray,
-                status,
-                is_fixed: isFixed,
-                is_recurring: isRecurring,
-                recurrence_frequency: isRecurring ? recurrenceFrequency : null,
-                recurrence_count: isRecurring ? count : null,
-            };
-            const { error } = await supabase.from("bank_transactions").update(payload).eq("id", initialData.id);
-            if (error) console.error(error);
-        } else {
-            const rows = Array.from({ length: count }).map((_, i) => {
-                const isoDate = brToISO(dateBr);
-                const dt = i === 0 ? isoDate : addInterval(isoDate, recurrenceFrequency, i);
-                const rowStatus = i === 0 ? status : "pending";
-                return {
+        try {
+            if (initialData) {
+                const payload = {
                     user_id: userData.user.id,
                     description,
                     amount: finalAmount,
-                    date: dt,
+                    date: brToISO(dateBr),
                     category_id: categoryId,
                     account_id: accountIdValue,
                     tags: tagsArray,
-                    status: rowStatus,
+                    status,
                     is_fixed: isFixed,
                     is_recurring: isRecurring,
                     recurrence_frequency: isRecurring ? recurrenceFrequency : null,
                     recurrence_count: isRecurring ? count : null,
                 };
-            });
-            const { error } = await supabase.from("bank_transactions").insert(rows);
-            if (error) console.error(error);
+                const { error } = await supabase.from("bank_transactions").update(payload).eq("id", initialData.id);
+                if (error) {
+                    console.error("Error updating transaction:", error);
+                    alert("Erro ao atualizar transação: " + error.message);
+                    return;
+                }
+            } else {
+                if (isRecurring) {
+                    const payloads = [];
+                    let currentBaseDate = brToISO(dateBr);
+                    for (let i = 0; i < count; i++) {
+                        const dateIso = i === 0 ? currentBaseDate : addInterval(currentBaseDate, recurrenceFrequency, i);
+                        payloads.push({
+                            user_id: userData.user.id,
+                            description: count > 1 ? `${description} (${i + 1}/${count})` : description,
+                            amount: finalAmount,
+                            date: dateIso,
+                            category_id: categoryId,
+                            account_id: accountIdValue,
+                            tags: tagsArray,
+                            status: i === 0 ? status : "pending",
+                            is_fixed: isFixed,
+                            is_recurring: true,
+                            recurrence_frequency: recurrenceFrequency,
+                            recurrence_count: count,
+                        });
+                    }
+                    const { error } = await supabase.from("bank_transactions").insert(payloads);
+                    if (error) {
+                        console.error("Error inserting recurring transactions:", error);
+                        alert("Erro ao criar transações recorrentes: " + error.message);
+                        return;
+                    }
+                } else {
+                    const payload = {
+                        user_id: userData.user.id,
+                        description,
+                        amount: finalAmount,
+                        date: brToISO(dateBr),
+                        category_id: categoryId,
+                        account_id: accountIdValue,
+                        tags: tagsArray,
+                        status,
+                        is_fixed: isFixed,
+                        is_recurring: false,
+                        recurrence_frequency: null,
+                        recurrence_count: null,
+                    };
+                    const { error } = await supabase.from("bank_transactions").insert(payload);
+                    if (error) {
+                        console.error("Error inserting transaction:", error);
+                        alert("Erro ao criar transação: " + error.message);
+                        return;
+                    }
+                }
+            }
+            onSuccess();
+            onOpenChange(false);
+        } catch (err) {
+            console.error("Unexpected error:", err);
+            alert("Erro inesperado ao salvar");
         }
-
-        onOpenChange(false);
-        onSuccess();
     }
 
     return (

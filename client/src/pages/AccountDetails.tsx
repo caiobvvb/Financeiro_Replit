@@ -34,7 +34,7 @@ type Transaction = {
     account?: { name: string; bank_id?: string };
 };
 
-type Account = { id: string; name: string; balance: number; bank_id?: string };
+type Account = { id: string; name: string; balance: number; bank_id?: string; overdraft_limit?: number };
 
 type Category = { id: string; name: string; type: string; icon: string; color: string };
 
@@ -65,6 +65,7 @@ export default function AccountDetails() {
     const [categories, setCategories] = React.useState<Category[]>([]);
     const [banks, setBanks] = React.useState<Bank[]>([]);
     const [loading, setLoading] = React.useState(true);
+    const [calculatedBalance, setCalculatedBalance] = React.useState<number>(0);
 
     const [dialogOpen, setDialogOpen] = React.useState(false);
     const [editingTransaction, setEditingTransaction] = React.useState<Transaction | null>(null);
@@ -136,7 +137,7 @@ export default function AccountDetails() {
         const start = new Date(year, month - 1, 1).toISOString().slice(0, 10);
         const end = new Date(year, month, 0).toISOString().slice(0, 10);
 
-        const [accRes, accsRes, catsRes, txsRes] = await Promise.all([
+        const [accRes, accsRes, catsRes, txsRes, allTxRes] = await Promise.all([
             supabase.from("accounts").select("*").eq("id", accountId).single(),
             supabase.from("accounts").select("id,name,balance").order("name"),
             supabase.from("categories").select("id,name,type,icon,color").order("name"),
@@ -150,7 +151,12 @@ export default function AccountDetails() {
                 .eq("account_id", accountId)
                 .gte("date", start)
                 .lte("date", end)
-                .order("date", { ascending: false })
+                .order("date", { ascending: false }),
+             supabase
+                .from("bank_transactions")
+                .select("amount")
+                .eq("account_id", accountId)
+                .eq("status", "paid")
         ]);
 
         if (accRes.data) setAccount(accRes.data);
@@ -164,6 +170,14 @@ export default function AccountDetails() {
             }));
             setTransactions(formatted);
         }
+
+        // Calculate total balance dynamically
+        if (accRes.data) {
+             const initial = Number(accRes.data.balance || 0);
+             const totalTx = (allTxRes.data || []).reduce((sum, t) => sum + Number(t.amount), 0);
+             setCalculatedBalance(initial + totalTx);
+        }
+
         setLoading(false);
     }
 
@@ -222,6 +236,8 @@ export default function AccountDetails() {
 
     const bank = banks.find((b) => b.id === account?.bank_id);
     const iconClass = bank ? bankIconByName(bank.shortName || bank.name) : account ? bankIconByName(account.name) : undefined;
+    const overdraft = Number(account?.overdraft_limit || 0);
+    const available = calculatedBalance + overdraft;
 
     // ------------------------------------------------------------------
     // Render
@@ -239,8 +255,14 @@ export default function AccountDetails() {
                 <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-4">
                         <div
-                            className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold shadow-md"
-                            style={{ backgroundColor: bank?.color || "#999" }}
+                            className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-md"
+                            style={{ 
+                                backgroundColor: bank?.color || (
+                                    (iconClass?.includes("banco-brasil") || account?.name.toLowerCase().includes("brasil")) 
+                                    ? "#F8D117" 
+                                    : "#999"
+                                ) 
+                            }}
                         >
                             {bank ? (
                                 iconClass ? (
@@ -256,11 +278,16 @@ export default function AccountDetails() {
                             <h1 className="text-3xl font-bold tracking-tight text-foreground">
                                 {account?.name || "Carregando..."}
                             </h1>
-                            <p className="text-muted-foreground">
-                                Saldo Atual: <span className="font-bold text-foreground">
-                                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(account?.balance || 0)}
-                                </span>
-                            </p>
+                            <div className="flex flex-col">
+                                <p className="text-muted-foreground">
+                                    Saldo Atual: <span className={`font-bold ${calculatedBalance < 0 ? 'text-red-600' : 'text-foreground'}`}>
+                                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(calculatedBalance)}
+                                    </span>
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    Limite: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(overdraft)} • Disponível: <span className="font-medium text-foreground">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(available)}</span>
+                                </p>
+                            </div>
                         </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">

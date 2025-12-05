@@ -25,6 +25,27 @@ import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 
 type CreditCardRow = { id: string; user_id: string; name: string; limit_amount: number; due_day: number; close_day: number; brand: string };
+type Bank = { id: string; code: string; name: string; shortName?: string | null; slug?: string | null; color?: string | null; logoUrl?: string | null };
+
+function bankIconByName(name?: string): string | undefined {
+  const n = (name || "").toLowerCase();
+  if (!n) return undefined;
+  if (n.includes("brasil")) return "ibb-banco-brasil";
+  if (n.includes("itaú") || n.includes("itau")) return "ibb-itau";
+  if (n.includes("bradesco")) return "ibb-bradesco";
+  if (n.includes("santander")) return "ibb-santander";
+  if (n.includes("caixa")) return "ibb-caixa";
+  if (n.includes("nubank") || n.includes("nu ")) return "ibb-nubank";
+  if (n.includes("inter")) return "ibb-inter";
+  if (n.includes("btg")) return "ibb-btg";
+  if (n.includes("c6")) return "ibb-c6";
+  if (n.includes("sicredi")) return "ibb-sicredi";
+  if (n.includes("sicoob")) return "ibb-sicoob";
+  if (n.includes("original")) return "ibb-original";
+  if (n.includes("safra")) return "ibb-safra";
+  if (n.includes("banrisul")) return "ibb-banrisul";
+  return undefined;
+}
 
 function BrandIcon({ brand, className }: { brand: string; className?: string }) {
   const b = (brand || "").toLowerCase();
@@ -697,9 +718,27 @@ export default function Accounts() {
                           <BrandIcon brand={cc.brand} className="w-8 h-4" />
                         </div>
                       </div>
-                      <div className="px-2 py-1 bg-white text-foreground rounded border border-border flex items-center">
-                        <BrandIcon brand={cc.brand} className="w-10 h-5" />
-                      </div>
+                      {(() => {
+                        const iconClass = bankIconByName(cc.name);
+                        const isBB = (iconClass && iconClass.includes("banco-brasil")) || cc.name.toLowerCase().includes("brasil");
+                        const bg = isBB ? "#F8D117" : "#999";
+                        
+                        if (iconClass) {
+                           return (
+                             <div
+                                className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-md"
+                                style={{ backgroundColor: bg }}
+                             >
+                               <span className={`${iconClass} text-2xl text-white`}></span>
+                             </div>
+                           );
+                        }
+                        return (
+                           <div className="w-12 h-12 rounded-full bg-white border border-border flex items-center justify-center shadow-md">
+                             <BrandIcon brand={cc.brand} className="w-8 h-5" />
+                           </div>
+                        );
+                      })()}
                     </div>
                     <div className="grid grid-cols-[1fr_auto] items-start gap-6 mb-2">
                       <div>

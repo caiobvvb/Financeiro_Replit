@@ -13,7 +13,7 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Wallet, Plus, Edit2, Trash2 } from "lucide-react";
+import { Wallet, Plus, Edit2, Trash2, Scale, AlertCircle } from "lucide-react";
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
 import { useLocation } from "wouter";
@@ -81,7 +81,8 @@ function bankIconClass(b: Bank): string | undefined {
   return undefined;
 }
 
-type Account = { id: string; name: string; balance: number | string; bankId?: string | null; type: string };
+type Account = { id: string; name: string; balance: number | string; bankId?: string | null; type: string; overdraftLimit?: number | string };
+type Transaction = { id: string; account_id: string; amount: number; status: string };
 
 export default function BankAccounts() {
   const [banks, setBanks] = React.useState<Bank[]>([]);
@@ -89,12 +90,14 @@ export default function BankAccounts() {
   const [bankOther, setBankOther] = React.useState<string>("");
   const [name, setName] = React.useState<string>("");
   const [balance, setBalance] = React.useState<string>("");
+  const [overdraftLimit, setOverdraftLimit] = React.useState<string>("");
   const [saving, setSaving] = React.useState<boolean>(false);
   const [info, setInfo] = React.useState<string>("");
   const [bankQuery, setBankQuery] = React.useState<string>("");
   const [logoErrorByCode, setLogoErrorByCode] = React.useState<Record<string, boolean>>({});
   const [logoSrcByCode, setLogoSrcByCode] = React.useState<Record<string, string>>({});
   const [accounts, setAccounts] = React.useState<Account[]>([]);
+  const [transactions, setTransactions] = React.useState<Transaction[]>([]);
   const [accountType, setAccountType] = React.useState<string>("");
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [, setLocation] = useLocation();
@@ -104,30 +107,52 @@ export default function BankAccounts() {
   const [editType, setEditType] = React.useState<string>("");
   const [editBankId, setEditBankId] = React.useState<string | null>(null);
   const [editBalance, setEditBalance] = React.useState<string>("");
+  const [editOverdraftLimit, setEditOverdraftLimit] = React.useState<string>("");
   const [editHasTx, setEditHasTx] = React.useState<boolean>(false);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  
+  // Adjust Balance Modal State
+  const [adjustOpen, setAdjustOpen] = React.useState(false);
+  const [adjustAccountId, setAdjustAccountId] = React.useState<string>("");
+  const [adjustNewBalance, setAdjustNewBalance] = React.useState<string>("");
 
   async function fetchAccounts() {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
         setAccounts([]);
+        setTransactions([]);
         return;
       }
-      const { data, error } = await supabase
+      
+      // Fetch Accounts
+      const { data: accData, error: accError } = await supabase
         .from("accounts")
-        .select("id,name,balance,bank_id,type")
+        .select("id,name,balance,bank_id,type,overdraft_limit")
         .order("name", { ascending: true });
-      if (error || !data) {
+        
+      if (accError || !accData) {
         setAccounts([]);
         return;
       }
-      const normalized = data.map((a: any) => ({
+
+      // Fetch Transactions (for dynamic balance)
+      const { data: txData, error: txError } = await supabase
+        .from("bank_transactions")
+        .select("id,account_id,amount,status")
+        .eq("status", "paid");
+
+      if (!txError && txData) {
+        setTransactions(txData as Transaction[]);
+      }
+
+      const normalized = accData.map((a: any) => ({
         id: a.id,
         name: a.name,
         balance: Number(a.balance ?? 0),
         bankId: a.bank_id ?? null,
         type: a.type ?? "Corrente",
+        overdraftLimit: Number(a.overdraft_limit ?? 0),
       })) as Account[];
       setAccounts(normalized);
     } catch {
@@ -150,6 +175,7 @@ export default function BankAccounts() {
 
   React.useEffect(() => {
     setBalance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(0));
+    setOverdraftLimit(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(0));
   }, []);
 
   function parseMoney(v: string): number {
@@ -163,6 +189,13 @@ export default function BankAccounts() {
     const num = parseInt(digits || "0", 10);
     const val = (num / 100);
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
+  }
+
+  function getCalculatedBalance(acc: Account): number {
+    const initial = Number(acc.balance || 0);
+    const accountTx = transactions.filter(t => t.account_id === acc.id);
+    const txSum = accountTx.reduce((sum, t) => sum + Number(t.amount), 0);
+    return initial + txSum;
   }
 
   async function saveAccount() {
@@ -179,6 +212,7 @@ export default function BankAccounts() {
       name: finalName,
       type: accountType || "Corrente",
       balance: parseMoney(balance),
+      overdraft_limit: parseMoney(overdraftLimit),
       bank_id: selectedBank === "other" ? null : selectedBank,
     } as any;
     try {
@@ -196,6 +230,7 @@ export default function BankAccounts() {
           name: payload.name,
           type: payload.type,
           balance: payload.balance,
+          overdraft_limit: payload.overdraft_limit,
           bank_id: payload.bank_id,
         });
       if (error) {
@@ -207,6 +242,7 @@ export default function BankAccounts() {
       setSaving(false);
       setName("");
       setBalance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(0));
+      setOverdraftLimit(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(0));
       setSelectedBank("");
       setBankOther("");
       setAccountType("");
@@ -225,6 +261,7 @@ export default function BankAccounts() {
     setEditType(acc.type || "Corrente");
     setEditBankId(acc.bankId ?? null);
     setEditBalance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(acc.balance || 0)));
+    setEditOverdraftLimit(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(acc.overdraftLimit || 0)));
     setEditOpen(true);
     (async () => {
       const { count } = await supabase
@@ -237,7 +274,12 @@ export default function BankAccounts() {
 
   async function updateAccount() {
     try {
-      const updatePayload: any = { name: editName, type: editType, bank_id: editBankId };
+      const updatePayload: any = { 
+        name: editName, 
+        type: editType, 
+        bank_id: editBankId,
+        overdraft_limit: parseMoney(editOverdraftLimit)
+      };
       if (!editHasTx) {
         updatePayload.balance = parseMoney(editBalance);
       }
@@ -280,6 +322,72 @@ export default function BankAccounts() {
     } catch {
       setInfo("Erro de rede");
       setDeletingId(null);
+    }
+  }
+
+  // Adjust Balance Functions
+  function openAdjust(acc: Account) {
+    const current = getCalculatedBalance(acc);
+    setAdjustAccountId(acc.id);
+    setAdjustNewBalance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(current));
+    setAdjustOpen(true);
+  }
+
+  async function handleAdjustBalance() {
+    try {
+      const account = accounts.find(a => a.id === adjustAccountId);
+      if (!account) return;
+
+      const current = getCalculatedBalance(account);
+      const target = parseMoney(adjustNewBalance);
+      const diff = target - current;
+
+      if (Math.abs(diff) < 0.01) {
+        setAdjustOpen(false);
+        return;
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Ensure category exists
+      const ADJUST_CATEGORY_ID = "4c8c2765-74a9-45d2-9634-42ee4541a333";
+      const { data: catData } = await supabase.from("categories").select("id").eq("id", ADJUST_CATEGORY_ID).single();
+      
+      if (!catData) {
+        // Create category if not exists (try)
+        await supabase.from("categories").insert({
+          id: ADJUST_CATEGORY_ID,
+          user_id: userData.user.id,
+          name: "Ajuste de Saldo",
+          type: "expense", // or income, doesn't matter for system category much
+          icon: "scale",
+          color: "#808080"
+        });
+      }
+
+      // Create transaction
+      const { error } = await supabase.from("bank_transactions").insert({
+        user_id: userData.user.id,
+        account_id: adjustAccountId,
+        category_id: ADJUST_CATEGORY_ID,
+        amount: diff, // Signed amount
+        date: new Date().toISOString().slice(0, 10),
+        description: "Ajuste de Saldo",
+        status: "paid"
+      });
+
+      if (error) {
+        alert("Erro ao ajustar saldo: " + error.message);
+        return;
+      }
+
+      setAdjustOpen(false);
+      fetchAccounts();
+
+    } catch (err) {
+      console.error(err);
+      alert("Erro inesperado");
     }
   }
 
@@ -413,6 +521,16 @@ export default function BankAccounts() {
                   onChange={(e) => setBalance(formatBalanceInput(e.target.value))}
                 />
               </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="overdraft" className="text-right">Limite Cheque Esp.</Label>
+                <Input
+                  id="overdraft"
+                  placeholder="R$ 0,00"
+                  className="col-span-3"
+                  value={overdraftLimit}
+                  onChange={(e) => setOverdraftLimit(formatBalanceInput(e.target.value))}
+                />
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" onClick={saveAccount} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
@@ -429,7 +547,7 @@ export default function BankAccounts() {
               <p className="text-sm font-medium text-muted-foreground mb-1">Saldo Total</p>
               <h2 className="text-3xl font-bold text-primary">
                 {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                  (Array.isArray(accounts) ? accounts : []).reduce((acc, curr) => acc + Number(curr.balance), 0)
+                  (Array.isArray(accounts) ? accounts : []).reduce((acc, curr) => acc + getCalculatedBalance(curr), 0)
                 )}
               </h2>
             </div>
@@ -443,6 +561,11 @@ export default function BankAccounts() {
       <div className="space-y-4">
         {(Array.isArray(accounts) ? accounts : []).map((account) => {
           const bank = banks.find((b) => b.id === account.bankId);
+          const currentBalance = getCalculatedBalance(account);
+          const limit = Number(account.overdraftLimit || 0);
+          const available = currentBalance + limit;
+          const isLow = currentBalance < 0; // Simple alert logic, can be improved
+
           return (
             <Card
               key={account.id}
@@ -451,8 +574,14 @@ export default function BankAccounts() {
             >
               <CardContent className="p-6 flex items-center gap-4">
                 <div
-                  className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-bold"
-                  style={{ backgroundColor: bank?.color || "#999" }}
+                  className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-sm"
+                  style={{ 
+                    backgroundColor: bank?.color || (
+                      (bankIconClass(bank)?.includes("banco-brasil") || bank?.name.toLowerCase().includes("brasil")) 
+                      ? "#F8D117" 
+                      : "#999"
+                    ) 
+                  }}
                 >
                   {bank ? (
                     bankIconClass(bank) ? (
@@ -465,16 +594,28 @@ export default function BankAccounts() {
                   )}
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-bold text-foreground">{account.name}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-foreground">{account.name}</h4>
+                    {isLow && <AlertCircle className="w-4 h-4 text-red-500" title="Saldo negativo" />}
+                  </div>
                   <p className="text-sm text-muted-foreground">{bank?.name || "Banco não informado"}</p>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Limite: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(limit)}
+                    <span className="mx-2">•</span>
+                    Disponível: <span className="font-medium text-foreground">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(available)}</span>
+                  </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-lg">
-                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(account.balance))}
+                  <p className={`font-bold text-lg ${currentBalance < 0 ? 'text-red-600' : 'text-foreground'}`}>
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(currentBalance)}
                   </p>
+                  <p className="text-xs text-muted-foreground">Saldo Atual</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); openEdit(account); }}>
+                <div className="flex items-center gap-2 ml-4">
+                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); openAdjust(account); }} title="Ajustar Saldo">
+                    <Scale className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); openEdit(account); }} title="Editar">
                     <Edit2 className="w-4 h-4" />
                   </Button>
                   <AlertDialog>
@@ -484,6 +625,7 @@ export default function BankAccounts() {
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-destructive"
                         onClick={(e) => { e.stopPropagation(); setDeletingId(account.id); }}
+                        title="Excluir"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -535,7 +677,7 @@ export default function BankAccounts() {
               </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit_balance" className="text-right">Saldo</Label>
+              <Label htmlFor="edit_balance" className="text-right">Saldo Inicial</Label>
               <div className="col-span-3">
                 <Input
                   id="edit_balance"
@@ -547,6 +689,17 @@ export default function BankAccounts() {
                 {editHasTx ? (
                   <p className="mt-1 text-xs text-muted-foreground">Não é possível editar o saldo com transações vinculadas.</p>
                 ) : null}
+              </div>
+            </div>
+             <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit_overdraft" className="text-right">Limite Cheque Esp.</Label>
+              <div className="col-span-3">
+                <Input
+                  id="edit_overdraft"
+                  placeholder="R$ 0,00"
+                  value={editOverdraftLimit}
+                  onChange={(e) => setEditOverdraftLimit(formatBalanceInput(e.target.value))}
+                />
               </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -570,6 +723,30 @@ export default function BankAccounts() {
           </div>
           <DialogFooter>
             <Button type="button" onClick={updateAccount}>Salvar alterações</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Ajustar Saldo</DialogTitle>
+            <DialogDescription>Informe o valor real do saldo atual. Uma transação de ajuste será criada automaticamente.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="adjust_balance" className="text-right">Novo Saldo</Label>
+              <Input
+                id="adjust_balance"
+                placeholder="R$ 0,00"
+                className="col-span-3"
+                value={adjustNewBalance}
+                onChange={(e) => setAdjustNewBalance(formatBalanceInput(e.target.value))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={handleAdjustBalance}>Confirmar Ajuste</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
