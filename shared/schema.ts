@@ -60,8 +60,8 @@ export type Category = typeof categories.$inferSelect;
 export const transactions = pgTable("transactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
-  accountId: varchar("account_id").notNull(),
-  categoryId: varchar("category_id").notNull(),
+  accountId: varchar("account_id"),
+  categoryId: varchar("category_id"),
   amount: numeric("amount", { precision: 20, scale: 2 }).notNull(),
   date: date("date").notNull(),
   description: text("description"),

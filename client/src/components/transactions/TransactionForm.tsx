@@ -20,7 +20,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, Pin, Repeat } from "lucide-react";
+import { Calendar as CalendarIcon, Pin, Repeat, Home, Car, Utensils, Wallet, TrendingUp, Briefcase, ShoppingCart, CreditCard, Fuel, Phone, Wifi, FileText, Gift, DollarSign, Coins, PiggyBank, Banknote, Bus, School, Heart, Stethoscope, Dumbbell, Pill, PlayCircle, Tv, Bike, Hammer, Wrench } from "lucide-react";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/lib/supabase";
 
@@ -44,8 +44,69 @@ type Transaction = {
     account?: { name: string; bank_id?: string };
 };
 
-type Account = { id: string; name: string };
+type Bank = { id: string; code: string; name: string; shortName?: string | null; slug?: string | null; color?: string | null; logoUrl?: string | null };
+type Account = { id: string; name: string; bank?: Bank | null };
 type Category = { id: string; name: string; type: string; icon: string; color: string };
+
+function bankIconClass(b: Bank | undefined): string | undefined {
+    if (!b) return undefined;
+    const byCode: Record<string, string> = {
+        "001": "ibb-banco-brasil",
+        "341": "ibb-itau",
+        "237": "ibb-bradesco",
+        "033": "ibb-santander",
+        "104": "ibb-caixa",
+        "260": "ibb-nubank",
+        "077": "ibb-inter",
+        "208": "ibb-btg",
+        "336": "ibb-c6",
+        "748": "ibb-sicredi",
+        "756": "ibb-bancoob",
+    };
+    const bySlug: Record<string, string> = {
+        "banco-do-brasil": "ibb-banco-brasil",
+        "itau": "ibb-itau",
+        "bradesco": "ibb-bradesco",
+        "santander": "ibb-santander",
+        "caixa": "ibb-caixa",
+        "nubank": "ibb-nubank",
+        "inter": "ibb-inter",
+        "btg": "ibb-btg",
+        "c6": "ibb-c6",
+        "sicredi": "ibb-sicredi",
+        "sicoob": "ibb-sicoob",
+        "original": "ibb-original",
+        "safra": "ibb-safra",
+        "banrisul": "ibb-banrisul",
+    };
+    const slug = (b.slug || "").toLowerCase();
+    if (slug && bySlug[slug]) return bySlug[slug];
+    if (b.code && byCode[b.code]) return byCode[b.code];
+    const n = ((b.shortName || b.name || "").toLowerCase());
+    if (n.includes("brasil")) return "ibb-banco-brasil";
+    if (n.includes("itaú") || n.includes("itau")) return "ibb-itau";
+    if (n.includes("bradesco")) return "ibb-bradesco";
+    if (n.includes("santander")) return "ibb-santander";
+    if (n.includes("caixa")) return "ibb-caixa";
+    if (n.includes("nubank") || n.includes("nu ")) return "ibb-nubank";
+    if (n.includes("inter")) return "ibb-inter";
+    if (n.includes("btg")) return "ibb-btg";
+    if (n.includes("c6")) return "ibb-c6";
+    if (n.includes("sicredi")) return "ibb-sicredi";
+    if (n.includes("sicoob")) return "ibb-sicoob";
+    if (n.includes("original")) return "ibb-original";
+    if (n.includes("safra")) return "ibb-safra";
+    if (n.includes("banrisul")) return "ibb-banrisul";
+    return undefined;
+}
+
+const iconMap: Record<string, React.ComponentType<any>> = { Home, Car, Utensils, Wallet, TrendingUp, Briefcase, ShoppingCart, CreditCard, Fuel, Phone, Wifi, FileText, Gift, DollarSign, Coins, PiggyBank, Banknote, Bus, School, Heart, Stethoscope, Dumbbell, Pill, PlayCircle, Tv, Bike, Hammer, Wrench };
+
+function IconByName({ name, className, color }: { name?: string | null; className?: string; color?: string | null }) {
+  const key = (name || "").trim();
+  const Comp = iconMap[key] || Utensils;
+  return <Comp className={className} style={{ color: color || undefined }} />;
+}
 
 interface TransactionFormProps {
     open: boolean;
@@ -159,6 +220,12 @@ export function TransactionForm({
         }
     }, [open, initialData, defaultAccountId]);
 
+    React.useEffect(() => {
+        if (isFixed || isRecurring) {
+            setStatus("pending");
+        }
+    }, [isFixed, isRecurring]);
+
     async function handleSave() {
         const { data: userData } = await supabase.auth.getUser();
         if (!userData.user) return;
@@ -172,17 +239,10 @@ export function TransactionForm({
         const finalAmount = type === "expense" ? -Math.abs(val) : Math.abs(val);
         const tagsArray = tags.split(",").map((t) => t.trim()).filter((t) => t);
         
-        if (!categoryId) {
-            alert("Selecione uma categoria");
-            return;
-        }
+        // Validação removida conforme solicitado
         
-        if (!accountId || accountId === "none") {
-            alert("Selecione uma conta");
-            return;
-        }
-
-        const accountIdValue = accountId === "none" ? null : (accountId || null);
+        const accountIdValue = accountId === "none" || !accountId ? null : accountId;
+        const categoryIdValue = categoryId === "none" || !categoryId ? null : categoryId;
 
         const baseCount = isRecurring && recurrenceCount ? parseInt(recurrenceCount) : 1;
         const count = isRecurring && !isNaN(baseCount) && baseCount > 0 ? baseCount : 1;
@@ -203,7 +263,7 @@ export function TransactionForm({
                     description,
                     amount: finalAmount,
                     date: brToISO(dateBr),
-                    category_id: categoryId,
+                    category_id: categoryIdValue,
                     account_id: accountIdValue,
                     tags: tagsArray,
                     status,
@@ -229,7 +289,7 @@ export function TransactionForm({
                             description: count > 1 ? `${description} (${i + 1}/${count})` : description,
                             amount: finalAmount,
                             date: dateIso,
-                            category_id: categoryId,
+                            category_id: categoryIdValue,
                             account_id: accountIdValue,
                             tags: tagsArray,
                             status: i === 0 ? status : "pending",
@@ -251,7 +311,7 @@ export function TransactionForm({
                         description,
                         amount: finalAmount,
                         date: brToISO(dateBr),
-                        category_id: categoryId,
+                        category_id: categoryIdValue,
                         account_id: accountIdValue,
                         tags: tagsArray,
                         status,
@@ -356,7 +416,10 @@ export function TransactionForm({
                                 <SelectContent>
                                     {categories.map((c) => (
                                         <SelectItem key={c.id} value={c.id}>
-                                            {c.name}
+                                            <div className="flex items-center gap-2">
+                                                <IconByName name={c.icon} className="w-4 h-4" color={c.color} />
+                                                <span>{c.name}</span>
+                                            </div>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -372,7 +435,16 @@ export function TransactionForm({
                                     <SelectItem value="none">Nenhuma</SelectItem>
                                     {accounts.map((a) => (
                                         <SelectItem key={a.id} value={a.id}>
-                                            {a.name}
+                                            <div className="flex items-center gap-2">
+                                                {a.bank ? (
+                                                    bankIconClass(a.bank) ? (
+                                                        <span className={`${bankIconClass(a.bank)} text-base`} style={{ color: (a.bank.color || "#333") }}></span>
+                                                    ) : (
+                                                        <span className="inline-block w-4 h-4 rounded-sm" style={{ backgroundColor: a.bank.color || "#999" }} />
+                                                    )
+                                                ) : null}
+                                                <span>{a.name}</span>
+                                            </div>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -405,7 +477,7 @@ export function TransactionForm({
 
                     <div className="flex items-center gap-4 border p-3 rounded-md">
                         <div className="flex items-center space-x-2">
-                            <Checkbox id="fixed" checked={isFixed} onCheckedChange={(c: boolean) => setIsFixed(c)} />
+                            <Checkbox id="fixed" checked={isFixed} onCheckedChange={(c: boolean) => { setIsFixed(c); if (c) setIsRecurring(false); }} />
                             <Label htmlFor="fixed" className="cursor-pointer flex items-center gap-1">
                                 <Pin className="w-3 h-3" /> Fixa
                             </Label>
@@ -414,7 +486,7 @@ export function TransactionForm({
                             <Checkbox
                                 id="recurring"
                                 checked={isRecurring}
-                                onCheckedChange={(c: boolean) => setIsRecurring(c)}
+                                onCheckedChange={(c: boolean) => { setIsRecurring(c); if (c) setIsFixed(false); }}
                             />
                             <Label htmlFor="recurring" className="cursor-pointer flex items-center gap-1">
                                 <Repeat className="w-3 h-3" /> Recorrente

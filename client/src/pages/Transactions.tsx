@@ -186,6 +186,13 @@ export default function Transactions() {
     return true;
   });
 
+  const accountsWithBank = React.useMemo(() => {
+    return accounts.map(a => {
+      const bank = banks.find(b => b.id === a.bank_id);
+      return { ...a, bank };
+    });
+  }, [accounts, banks]);
+
   return (
     <Layout>
       <div>

@@ -30,7 +30,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 type Bank = { id: string; code: string; name: string; shortName?: string | null; slug?: string | null; color?: string | null; logoUrl?: string | null };
-function bankIconClass(b: Bank): string | undefined {
+function bankIconClass(b: Bank | undefined): string | undefined {
+  if (!b) return undefined;
   const byCode: Record<string, string> = {
     "001": "ibb-banco-brasil",
     "341": "ibb-itau",

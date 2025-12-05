@@ -139,7 +139,7 @@ export default function AccountDetails() {
 
         const [accRes, accsRes, catsRes, txsRes, allTxRes] = await Promise.all([
             supabase.from("accounts").select("*").eq("id", accountId).single(),
-            supabase.from("accounts").select("id,name,balance").order("name"),
+            supabase.from("accounts").select("id,name,balance,bank_id").order("name"),
             supabase.from("categories").select("id,name,type,icon,color").order("name"),
             supabase
                 .from("bank_transactions")
@@ -239,6 +239,13 @@ export default function AccountDetails() {
     const overdraft = Number(account?.overdraft_limit || 0);
     const available = calculatedBalance + overdraft;
 
+    const accountsWithBank = React.useMemo(() => {
+        return accounts.map(a => {
+            const bank = banks.find(b => b.id === a.bank_id);
+            return { ...a, bank };
+        });
+    }, [accounts, banks]);
+
     // ------------------------------------------------------------------
     // Render
     // ------------------------------------------------------------------
@@ -315,7 +322,7 @@ export default function AccountDetails() {
                     onSuccess={fetchData}
                     initialData={editingTransaction}
                     defaultAccountId={accountId}
-                    accounts={accounts}
+                    accounts={accountsWithBank}
                     categories={categories}
                 />
 
