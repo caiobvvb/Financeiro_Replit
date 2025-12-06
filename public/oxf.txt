@@ -1,0 +1,122 @@
+Para orientar a sua IA (Trae) na implementação dessa funcionalidade sem entrar em detalhes de banco de dados, precisamos focar no Fluxo do Usuário (UX), na Lógica de Negócio e no Mapeamento de Dados.
+
+Abaixo, estruturei o contexto exato que você deve fornecer a ela.
+
+Estrutura do Contexto para a IA
+Você pode copiar e colar (ou adaptar) o seguinte bloco de instruções para a Trae. Ele descreve o comportamento esperado do sistema:
+
+1. Objetivo da Funcionalidade
+Implementar um módulo de conciliação bancária via importação de arquivos OFX. O sistema deve ler o extrato bancário, tratar os dados para evitar duplicidades e apresentar uma interface de verificação antes de efetivar os lançamentos. Use os arquivos nubank.ofx e inter.ofx da pasta public como referência para o parser.
+
+2. Fluxo de UX (Interface do Usuário)
+Gatilho: Criar um botão "Importar Extrato".
+
+Seleção: Ao clicar, abrir o seletor de arquivos do sistema operacional (filtro: .ofx).
+
+Processamento: O sistema lê o arquivo em memória.
+
+Tela de Verificação (Staging Area):
+
+Exibir uma lista (tabela/grid) com o que foi lido do arquivo.
+
+Nesta tela, o usuário deve visualizar: Data, Descrição e Valor.
+
+Ação: O usuário deve ter um botão "Confirmar Importação" ou "Cancelar".
+
+3. Regras de Negócio e Lógica (Backend/Frontend Logic)
+Prevenção de Duplicidade (Idempotência):
+
+Cada transação no OFX possui um identificador único (tag <FITID>).
+
+Antes de exibir na tela de verificação, o sistema deve comparar os FITIDs do arquivo com os FITIDs já existentes no histórico do sistema.
+
+Se o FITID já existir, essa transação deve ser ignorada ou marcada como "Já importada".
+
+Controle de Período:
+
+O sistema deve identificar a menor data (<DTSTART>) e a maior data (<DTEND>) contidas no arquivo importado.
+
+Ao confirmar a importação, deve-se registrar metadados: "Data da Importação" (hoje) e "Período Coberto" (de X até Y), para auditoria futura.
+
+Status Financeiro:
+
+Como se trata de um extrato oficial, todas as transações importadas nascem com o status "Pago" (se saída) ou "Recebido" (se entrada). Não são previsões, são fatos consumados.
+
+4. Tratamento dos Dados (Parsing)
+O arquivo OFX fornecerá:
+
+Data: Tag <DTPOSTED>
+
+Valor: Tag <TRNAMT> (Valores negativos são saídas, positivos são entradas).
+
+Descrição: Tag <MEMO> ou <NAME>.
+
+O que o OFX NÃO fornece (e como lidar):
+
+Categorias: O arquivo não possui categorias de negócio (ex: Alimentação, Transporte).
+
+Solução: Na tela de verificação ou após a importação, o campo "Categoria" deve ficar vazio ou como "A Classificar", obrigando o usuário a categorizar manualmente depois.
+
+Transferências:
+
+Lógica: O sistema deve tentar identificar transferências.
+
+Heurística: Se a descrição contiver palavras como "Transf", "Pix Enviado", "TED", o sistema deve sugerir o tipo de lançamento como "Transferência" em vez de uma despesa comum.
+
+Cruzamento: Se houver duas contas cadastradas no sistema e o valor sair de uma e entrar na outra na mesma data (mesmo valor), o sistema deve sugerir vincular ambas como uma única operação de transferência interna.
+
+Resumo das Etapas para a IA
+Se você precisar quebrar em passos menores para ela, peça nesta ordem:
+
+Parser: "Crie uma função que leia o arquivo OFX (use os exemplos da pasta public) e me devolva um array de objetos JSON com: id (fitid), data, descrição e valor."
+
+Verificação: "Crie uma interface que receba esse array JSON e mostre para o usuário aprovar."
+
+Filtro: "Implemente uma lógica que, antes de mostrar a lista, filtre itens que já possuam o mesmo ID importado anteriormente."
+
+Aqui está um resumo técnico e conceitual preparado para a Trae. Você pode colar este texto diretamente para ela. Ele define o padrão do arquivo e estabelece as expectativas de lógica de código (frontend/backend logic) sem tocar em persistência de dados.
+
+Resumo para a IA: Contexto OFX e Expectativas de Implementação
+1. O que é o arquivo OFX? O OFX (Open Financial Exchange) é o padrão universal para troca de informações financeiras. Embora pareça um XML, ele muitas vezes não fecha todas as tags (SGML antigo), o que exige um parser robusto.
+
+Contexto dos Arquivos: Na pasta public, você encontrará exemplos reais (nubank.ofx e inter.ofx). O seu código deve ser capaz de ler a estrutura desses arquivos.
+
+Estrutura de Interesse: Dentro do arquivo, o bloco principal que nos interessa é o <BANKTRANLIST>, que contém várias transações identificadas pela tag <STMTTRN>.
+
+2. Mapeamento de Tags (De -> Para) O código deve ler as tags do OFX e mapear para os objetos da nossa aplicação da seguinte forma:
+
+<TRNAMT> -> Valor: Se negativo é saída, se positivo é entrada.
+
+<DTPOSTED> -> Data: Geralmente vem no formato YYYYMMDDHHMMSS e precisa ser formatada para data legível.
+
+<MEMO> ou <NAME> -> Descrição: O texto que aparece no extrato.
+
+<FITID> -> ID Único: Esta é a chave de ouro. É o ID único gerado pelo banco para aquela transação. Usaremos isso para garantir a não-duplicidade.
+
+3. O que esperar da Lógica do Código (Implementation Logic)
+
+O código deve ser estruturado em 3 camadas lógicas (em memória):
+
+A. O Parser (Leitura):
+
+Uma função utilitária que recebe o arquivo raw (texto) e converte em um Array de Objetos JavaScript limpo.
+
+Deve tratar a formatação da data e converter o valor de string para number/float.
+
+B. O Tratamento (Regras de Negócio em Memória):
+
+Status Imutável: Ao ler o arquivo, defina automaticamente o status. Se Valor < 0, status é "Pago". Se Valor > 0, status é "Recebido".
+
+Heurística de Transferência: Criar uma verificação na string da Descrição. Se conter "TED", "DOC", "PIX", ou "Transferência", o código deve sinalizar visualmente ou sugerir uma flag de "Possível Transferência".
+
+Categoria: O campo categoria deve vir null ou "A definir", pois o OFX não possui essa informação.
+
+C. A Validação (Deduplicação):
+
+O código deve iterar sobre o Array de novos itens e compará-los com uma lista de IDs (FITID) já existentes no estado da aplicação.
+
+Lógica: Se (NovoImportado.FITID == Existente.FITID) { Ignorar ou Marcar como Duplicado }.
+
+Dica de Prompt:
+
+"Trae, com base nesse resumo, comece criando a função utilitária (o parser) que lê os arquivos da pasta public e retorna o array formatado. Depois avançamos para a interface."

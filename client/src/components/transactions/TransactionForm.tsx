@@ -196,7 +196,12 @@ export function TransactionForm({
                 setType(initialData.amount >= 0 ? "income" : "expense");
                 setCategoryId(initialData.category_id || "");
                 setAccountId(initialData.account_id ?? "none");
-                setDateBr(new Date(initialData.date).toLocaleDateString("pt-BR"));
+                if (initialData.date && initialData.date.includes("-")) {
+                    const [y, m, d] = initialData.date.split("T")[0].split("-");
+                    setDateBr(`${d}/${m}/${y}`);
+                } else {
+                    setDateBr(new Date(initialData.date).toLocaleDateString("pt-BR"));
+                }
                 setTags(initialData.tags ? initialData.tags.join(", ") : "");
                 setStatus(initialData.status || "pending");
                 setIsFixed(initialData.is_fixed || false);

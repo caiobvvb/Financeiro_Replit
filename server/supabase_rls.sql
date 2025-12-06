@@ -355,3 +355,30 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   create policy sp_delete_own on public.statement_payments for delete using (user_id = auth.uid()::text);
 exception when duplicate_object then null; end $$;
+
+-- Importações de OFX por conta
+create table if not exists public.bank_imports (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  account_id text not null references public.accounts(id) on delete cascade,
+  source_label text,
+  period_start date,
+  period_end date,
+  imported_at timestamp with time zone default now(),
+  entry_count integer,
+  file_checksum text
+);
+create index if not exists idx_bank_imports_account on public.bank_imports(account_id);
+alter table public.bank_imports enable row level security;
+do $$ begin
+  create policy bi_select_own on public.bank_imports for select using (user_id = auth.uid()::text);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy bi_insert_own on public.bank_imports for insert with check (user_id = auth.uid()::text);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy bi_update_own on public.bank_imports for update using (user_id = auth.uid()::text);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy bi_delete_own on public.bank_imports for delete using (user_id = auth.uid()::text);
+exception when duplicate_object then null; end $$;

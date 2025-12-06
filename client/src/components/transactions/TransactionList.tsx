@@ -12,6 +12,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Types
 type Transaction = {
@@ -29,6 +34,8 @@ type Transaction = {
     recurrence_frequency: string | null;
     recurrence_count: number | null;
     status: "paid" | "pending";
+    fitid?: string | null;
+    import_id?: string | null;
     category?: { name: string; icon: string; color: string; type: string };
     account?: { name: string; bank_id?: string };
 };
@@ -65,6 +72,16 @@ export function TransactionList({ transactions, onEdit, onDelete, onConvertToTra
         return undefined;
     }
 
+    function formatDate(dateStr: string) {
+        if (!dateStr) return "-";
+        // Prevent timezone issues by handling YYYY-MM-DD manually
+        if (dateStr.length === 10 && dateStr.includes("-")) {
+            const [y, m, d] = dateStr.split("-");
+            return `${d}/${m}/${y}`;
+        }
+        return new Date(dateStr).toLocaleDateString("pt-BR", { timeZone: "UTC" });
+    }
+
     return (
         <div className="w-full overflow-auto">
             <table className="w-full">
@@ -98,11 +115,21 @@ export function TransactionList({ transactions, onEdit, onDelete, onConvertToTra
                                     )}>
                                         <IconByName name={tx.category?.icon || "Circle"} className="w-6 h-6" />
                                     </div>
-                                    <div className="flex flex-col">
-                                        <span className="font-semibold text-foreground">{tx.description || "Sem descrição"}</span>
+                                    <div className="flex flex-col max-w-[250px] sm:max-w-[350px]">
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="font-semibold text-foreground truncate block cursor-default">
+                                                    {tx.description || "Sem descrição"}
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p className="max-w-[300px] break-words">{tx.description}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
                                         <div className="flex gap-1 mt-1">
                                             {tx.is_fixed && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 gap-1"><Pin className="w-2 h-2" /> Fixa</Badge>}
                                             {tx.is_recurring && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 gap-1"><Repeat className="w-2 h-2" /> Recorrente</Badge>}
+                                            {(tx.import_id || tx.fitid) && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">Importado</Badge>}
                                         </div>
                                     </div>
                                 </div>
@@ -117,9 +144,9 @@ export function TransactionList({ transactions, onEdit, onDelete, onConvertToTra
                                             {tx.category?.name || "Sem categoria"}
                                         </span>
                                     </div>
-                                    {tx.tags && tx.tags.length > 0 && (
+                                    {tx.tags && tx.tags.filter(t => !t.startsWith('import:')).length > 0 && (
                                         <div className="flex flex-wrap gap-1">
-                                            {tx.tags.map((tag, i) => (
+                                            {tx.tags.filter(t => !t.startsWith('import:')).map((tag, i) => (
                                         <span key={`${tag}-${i}`} className="px-2 py-1 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                                             {tag}
                                         </span>
@@ -158,7 +185,7 @@ export function TransactionList({ transactions, onEdit, onDelete, onConvertToTra
                                 </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                                {new Date(tx.date).toLocaleDateString('pt-BR')}
+                                {formatDate(tx.date)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-center">
                                 {tx.status === 'paid' ? (

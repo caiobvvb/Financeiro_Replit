@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
 import { TransactionForm } from "@/components/transactions/TransactionForm";
@@ -33,6 +32,8 @@ type Transaction = {
   recurrence_frequency: string | null;
   recurrence_count: number | null;
   status: "paid" | "pending";
+  fitid?: string | null;
+  import_id?: string | null;
   category?: { name: string; icon: string; color: string; type: string };
   account?: { name: string; bank_id?: string };
 };
@@ -59,6 +60,8 @@ export default function Transactions() {
   const [search, setSearch] = React.useState("");
   const [filterType, setFilterType] = React.useState<"all" | "income" | "expense">("all");
   const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(null);
+  const [filterImported, setFilterImported] = React.useState<"all"|"only"|"hide">("all");
+  const [filterCategory, setFilterCategory] = React.useState<"all"|"categorized"|"uncategorized">("all");
 
   const today = new Date();
   const [year, setYear] = React.useState(today.getFullYear());
@@ -179,10 +182,36 @@ export default function Transactions() {
     expense: baseFiltered.filter(tx => tx.amount < 0).length
   };
 
-  const filteredTransactions = baseFiltered.filter(tx => {
+  const afterType = baseFiltered.filter(tx => {
     if (filterType === "all") return true;
     if (filterType === "income") return tx.amount >= 0;
     if (filterType === "expense") return tx.amount < 0;
+    return true;
+  });
+
+  // Counts for Import
+  const countsImported = {
+    all: afterType.length,
+    only: afterType.filter(t => t.import_id || t.fitid).length,
+    hide: afterType.filter(t => !(t.import_id || t.fitid)).length
+  };
+
+  const afterImported = afterType.filter(tx => {
+    if (filterImported === "only") return !!(tx.import_id || tx.fitid);
+    if (filterImported === "hide") return !(tx.import_id || tx.fitid);
+    return true;
+  });
+
+  // Counts for Category
+  const countsCategory = {
+    all: afterImported.length,
+    categorized: afterImported.filter(t => t.category_id).length,
+    uncategorized: afterImported.filter(t => !t.category_id).length
+  };
+
+  const filteredTransactions = afterImported.filter(tx => {
+    if (filterCategory === "categorized") return !!tx.category_id;
+    if (filterCategory === "uncategorized") return !tx.category_id;
     return true;
   });
 
@@ -309,8 +338,8 @@ export default function Transactions() {
               </button>
             </div>
 
-            <div className="p-4 flex flex-col md:flex-row gap-4 justify-between items-center bg-muted/10">
-              <div className="relative w-full">
+            <div className="p-4 flex flex-col xl:flex-row gap-4 justify-between items-center bg-muted/10">
+              <div className="relative w-full xl:w-96">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <Input
                   placeholder="Buscar por descrição..."
@@ -318,6 +347,31 @@ export default function Transactions() {
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
+              </div>
+              <div className="flex flex-col lg:flex-row gap-4 items-center w-full xl:w-auto overflow-x-auto">
+                <div className="flex items-center bg-background rounded-md border shadow-sm p-1 shrink-0">
+                  <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterImported === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterImported("all")}>
+                    Todas <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsImported.all}</span>
+                  </button>
+                  <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterImported === "only" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterImported("only")}>
+                    Apenas Importadas <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsImported.only}</span>
+                  </button>
+                  <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterImported === "hide" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterImported("hide")}>
+                    Ocultar Importadas <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsImported.hide}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center bg-background rounded-md border shadow-sm p-1 shrink-0">
+                  <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterCategory === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterCategory("all")}>
+                    Todas <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsCategory.all}</span>
+                  </button>
+                  <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterCategory === "categorized" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterCategory("categorized")}>
+                    Com Categoria <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsCategory.categorized}</span>
+                  </button>
+                  <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterCategory === "uncategorized" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterCategory("uncategorized")}>
+                    Sem Categoria <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsCategory.uncategorized}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -350,4 +404,3 @@ export default function Transactions() {
     </Layout>
   );
 }
-

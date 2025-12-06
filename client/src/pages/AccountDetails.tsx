@@ -2,7 +2,9 @@ import { Layout } from "@/components/layout/Layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, Plus, ArrowLeft, Wallet } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { Search, Filter, Plus, ArrowLeft, Wallet, Upload } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import * as React from "react";
 import { supabase } from "@/lib/supabase";
@@ -11,6 +13,7 @@ import { TransactionForm } from "@/components/transactions/TransactionForm";
 import { TransactionList } from "@/components/transactions/TransactionList";
 import { TransferWarningDialog } from "@/components/transactions/TransferWarningDialog";
 import { TransferConversionDialog } from "@/components/transactions/TransferConversionDialog";
+import { OfxImportDialog } from "@/components/transactions/OfxImportDialog";
 
 // ------------------------------------------------------------------
 // Types
@@ -30,6 +33,8 @@ type Transaction = {
     recurrence_frequency: string | null;
     recurrence_count: number | null;
     status: "paid" | "pending";
+    fitid?: string | null;
+    import_id?: string | null;
     category?: { name: string; icon: string; color: string; type: string };
     account?: { name: string; bank_id?: string };
 };
@@ -69,6 +74,8 @@ export default function AccountDetails() {
 
     const [dialogOpen, setDialogOpen] = React.useState(false);
     const [editingTransaction, setEditingTransaction] = React.useState<Transaction | null>(null);
+    const [importOpen, setImportOpen] = React.useState(false);
+    const [lastImport, setLastImport] = React.useState<{ imported_at?: string; period_start?: string; period_end?: string } | null>(null);
 
     // Transfer conversion UI state
     const [transferWarningOpen, setTransferWarningOpen] = React.useState(false);
@@ -83,6 +90,8 @@ export default function AccountDetails() {
     const today = new Date();
     const [year, setYear] = React.useState(today.getFullYear());
     const [month, setMonth] = React.useState(today.getMonth() + 1);
+    const [filterImported, setFilterImported] = React.useState<"all"|"only"|"hide">("all");
+    const [filterCategory, setFilterCategory] = React.useState<"all"|"categorized"|"uncategorized">("all");
 
     // ------------------------------------------------------------------
     // Helpers
@@ -118,6 +127,24 @@ export default function AccountDetails() {
     React.useEffect(() => {
         if (accountId) fetchData();
     }, [accountId, year, month]);
+
+    // Última importação agora consultada exclusivamente via banco (efeito abaixo)
+
+    React.useEffect(() => {
+        (async () => {
+            if (!accountId) return
+            const { data: userData } = await supabase.auth.getUser()
+            if (!userData.user) return
+            const { data } = await supabase
+                .from("bank_imports")
+                .select("imported_at,period_start,period_end")
+                .eq("account_id", accountId)
+                .order("imported_at", { ascending: false })
+                .limit(1)
+            const row = data?.[0]
+            if (row) setLastImport({ imported_at: row.imported_at, period_start: row.period_start, period_end: row.period_end })
+        })()
+    }, [accountId])
 
     React.useEffect(() => {
         fetch("/api/banks")
@@ -227,10 +254,43 @@ export default function AccountDetails() {
         return matchSearch && matchAccount;
     });
 
-    const filteredTransactions = baseFiltered.filter((tx) => {
+    // Counts for Type
+    const counts = {
+        all: baseFiltered.length,
+        income: baseFiltered.filter(t => t.amount >= 0).length,
+        expense: baseFiltered.filter(t => t.amount < 0).length
+    };
+
+    const afterType = baseFiltered.filter((tx) => {
         if (filterType === "all") return true;
         if (filterType === "income") return tx.amount >= 0;
         if (filterType === "expense") return tx.amount < 0;
+        return true;
+    });
+
+    // Counts for Import
+    const countsImported = {
+        all: afterType.length,
+        only: afterType.filter(t => t.import_id || t.fitid).length,
+        hide: afterType.filter(t => !(t.import_id || t.fitid)).length
+    };
+
+    const afterImported = afterType.filter((tx) => {
+        if (filterImported === "only") return !!(tx.import_id || tx.fitid);
+        if (filterImported === "hide") return !(tx.import_id || tx.fitid);
+        return true;
+    });
+
+    // Counts for Category
+    const countsCategory = {
+        all: afterImported.length,
+        categorized: afterImported.filter(t => t.category_id).length,
+        uncategorized: afterImported.filter(t => !t.category_id).length
+    };
+
+    const filteredTransactions = afterImported.filter((tx) => {
+        if (filterCategory === "categorized") return !!tx.category_id;
+        if (filterCategory === "uncategorized") return !tx.category_id;
         return true;
     });
 
@@ -294,13 +354,23 @@ export default function AccountDetails() {
                                 <p className="text-xs text-muted-foreground">
                                     Limite: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(overdraft)} • Disponível: <span className="font-medium text-foreground">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(available)}</span>
                                 </p>
+                                {lastImport?.imported_at && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Última importação: {new Date(lastImport.imported_at as any).toLocaleString("pt-BR")} ({lastImport.period_start} — {lastImport.period_end})
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                        <Button onClick={openNew} className="bg-primary hover:bg-primary/90 text-white shadow-lg">
-                            <Plus className="w-4 h-4 mr-2" /> Nova Transação
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button onClick={() => setImportOpen(true)} className="bg-primary hover:bg-primary/90 text-white shadow-lg">
+                                <Upload className="w-4 h-4 mr-2" /> Importar OFX
+                            </Button>
+                            <Button onClick={openNew} className="bg-primary hover:bg-primary/90 text-white shadow-lg">
+                                <Plus className="w-4 h-4 mr-2" /> Nova Transação
+                            </Button>
+                        </div>
                         <div className="flex items-center gap-2">
                             <Button variant="outline" size="sm" onClick={() => setMonth((m) => (m === 1 ? (setYear((y) => y - 1), 12) : m - 1))}>
                                 {"<"}
@@ -326,30 +396,91 @@ export default function AccountDetails() {
                     categories={categories}
                 />
 
+                <OfxImportDialog
+                    open={importOpen}
+                    onOpenChange={(v) => setImportOpen(v)}
+                    accountId={accountId as string}
+                    onImported={() => { fetchData(); }}
+                />
+
                 {/* Filters + list */}
                 <Card className="border-none shadow-md">
-                    <div className="p-6 flex flex-col md:flex-row gap-4 justify-between items-center border-b border-border/50">
-                        <div className="relative w-full md:w-96">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                            <Input
-                                placeholder="Buscar por descrição..."
-                                className="pl-10 bg-muted/30 border-transparent focus:bg-white transition-all duration-200"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
+                    <div className="flex flex-col">
+                        <div className="flex items-center border-b w-full px-6 pt-2 overflow-x-auto">
+                            <button
+                                className={cn(
+                                    "flex items-center gap-2 px-6 py-4 border-b-2 transition-colors text-sm font-medium whitespace-nowrap",
+                                    filterType === "all" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+                                )}
+                                onClick={() => setFilterType("all")}
+                            >
+                                Todos
+                                <Badge variant={filterType === "all" ? "default" : "secondary"} className="ml-1 text-[10px] h-5 px-1.5 rounded-full">
+                                    {counts.all}
+                                </Badge>
+                            </button>
+                            <button
+                                className={cn(
+                                    "flex items-center gap-2 px-6 py-4 border-b-2 transition-colors text-sm font-medium whitespace-nowrap",
+                                    filterType === "income" ? "border-emerald-500 text-emerald-600" : "border-transparent text-muted-foreground hover:text-foreground"
+                                )}
+                                onClick={() => setFilterType("income")}
+                            >
+                                Receitas
+                                <Badge variant="outline" className={cn("ml-1 text-[10px] h-5 px-1.5 rounded-full", filterType === "income" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "")}>
+                                    {counts.income}
+                                </Badge>
+                            </button>
+                            <button
+                                className={cn(
+                                    "flex items-center gap-2 px-6 py-4 border-b-2 transition-colors text-sm font-medium whitespace-nowrap",
+                                    filterType === "expense" ? "border-red-500 text-red-600" : "border-transparent text-muted-foreground hover:text-foreground"
+                                )}
+                                onClick={() => setFilterType("expense")}
+                            >
+                                Despesas
+                                <Badge variant="outline" className={cn("ml-1 text-[10px] h-5 px-1.5 rounded-full", filterType === "expense" ? "bg-red-100 text-red-700 border-red-200" : "")}>
+                                    {counts.expense}
+                                </Badge>
+                            </button>
                         </div>
-                        <div className="flex gap-2">
-                            <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
-                                <SelectTrigger className="w-[140px]">
-                                    <Filter className="w-4 h-4 mr-2" />
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Todos</SelectItem>
-                                    <SelectItem value="income">Receitas</SelectItem>
-                                    <SelectItem value="expense">Despesas</SelectItem>
-                                </SelectContent>
-                            </Select>
+
+                        <div className="p-4 flex flex-col xl:flex-row gap-4 justify-between items-center bg-muted/10">
+                            <div className="relative w-full xl:w-96">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                                <Input
+                                    placeholder="Buscar por descrição..."
+                                    className="pl-10 bg-white border-border/50 focus:bg-white transition-all duration-200"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                />
+                            </div>
+                            
+                            <div className="flex flex-col lg:flex-row gap-4 items-center w-full xl:w-auto overflow-x-auto">
+                                <div className="flex items-center bg-background rounded-md border shadow-sm p-1 shrink-0">
+                                    <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterImported === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterImported("all")}>
+                                        Todas <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsImported.all}</span>
+                                    </button>
+                                    <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterImported === "only" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterImported("only")}>
+                                        Apenas Importadas <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsImported.only}</span>
+                                    </button>
+                                    <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterImported === "hide" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterImported("hide")}>
+                                        Ocultar Importadas <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsImported.hide}</span>
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center bg-background rounded-md border shadow-sm p-1 shrink-0">
+                                    <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterCategory === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterCategory("all")}>
+                                        Todas <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsCategory.all}</span>
+                                    </button>
+                                    <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterCategory === "categorized" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterCategory("categorized")}>
+                                        Com Categoria <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsCategory.categorized}</span>
+                                    </button>
+                                    <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterCategory === "uncategorized" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterCategory("uncategorized")}>
+                                        Sem Categoria <span className="opacity-70 text-[10px] bg-black/10 px-1 rounded">{countsCategory.uncategorized}</span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <CardContent className="p-0">
