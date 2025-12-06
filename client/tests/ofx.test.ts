@@ -26,7 +26,7 @@ const sample = `
 </OFX>`
 
 test("parseOfx extrai transações básicas", () => {
-  const rows = parseOfx(sample)
+  const { items: rows } = parseOfx(sample)
   expect(rows.length).toBe(2)
   expect(rows[0].date).toBe("2025-12-03")
   expect(rows[0].amount).toBe(-123.45)

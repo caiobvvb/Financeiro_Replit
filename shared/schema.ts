@@ -25,6 +25,7 @@ export const accounts = pgTable("accounts", {
   type: text("type").notNull(),
   balance: numeric("balance", { precision: 20, scale: 2 }).default("0"),
   overdraftLimit: numeric("overdraft_limit", { precision: 20, scale: 2 }).default("0"),
+  bankCode: text("bank_code"),
 });
 
 export const insertAccountSchema = createInsertSchema(accounts).pick({
@@ -34,6 +35,7 @@ export const insertAccountSchema = createInsertSchema(accounts).pick({
   type: true,
   balance: true,
   overdraftLimit: true,
+  bankCode: true,
 });
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type Account = typeof accounts.$inferSelect;

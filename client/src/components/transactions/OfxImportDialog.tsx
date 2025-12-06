@@ -18,8 +18,9 @@ async function sha256(buf: ArrayBuffer) {
   return a.map((b) => b.toString(16).padStart(2, "0")).join("")
 }
 
-export function parseOfx(text: string): ParsedItem[] {
+export function parseOfx(text: string): { items: ParsedItem[], bankId?: string } {
   const t = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+  const bankId = (t.match(/<BANKID>[\s\n]*([^\n<]+)/i)?.[1] || "").trim()
   const blocks = t.split(/<STMTTRN>/i).slice(1)
   const out: ParsedItem[] = []
   for (const b of blocks) {
@@ -35,7 +36,7 @@ export function parseOfx(text: string): ParsedItem[] {
     const desc = [name, memo].filter(Boolean).join(" - ") || "Sem descrição"
     out.push({ date: iso, amount, description: desc, fitid: fitid || undefined })
   }
-  return out
+  return { items: out, bankId }
 }
 
 import { Upload } from "lucide-react"
@@ -66,21 +67,80 @@ export function OfxImportDialog({ open, onOpenChange, accountId, onImported }: {
     const sum = await sha256(buf)
     setChecksum(sum)
     const txt = await new Response(buf).text()
-    const parsed = parseOfx(txt)
+    const { items: parsed, bankId } = parseOfx(txt)
+    console.log("DEBUG: OFX Raw Start:", txt.slice(0, 200))
+    console.log("DEBUG: Extracted bankId:", bankId)
+
+    // Validate Bank Code
+    // 1. Fetch account details (try to get bank_code directly)
+    const { data: accData } = await supabase
+      .from("accounts")
+      .select("bank_id, bank_code")
+      .eq("id", accountId)
+      .single()
+
+    let accountBankCode = accData?.bank_code
+
+    // 2. If no direct bank_code, but we have a bank_id, fetch from banks table
+    if (!accountBankCode && accData?.bank_id) {
+      const { data: bankData } = await supabase
+        .from("banks")
+        .select("code")
+        .eq("id", accData.bank_id)
+        .single()
+
+      if (bankData?.code) {
+        accountBankCode = bankData.code
+      }
+    }
+
+    if (accountBankCode) {
+      if (!bankId) {
+        setItems([]); setSelection({}); setDuplicates({}); setPeriod({});
+        setError("Não foi possível identificar o banco no arquivo OFX. Importação bloqueada por segurança.");
+        return;
+      }
+
+      const b1 = parseInt(bankId, 10)
+      const b2 = parseInt(accountBankCode, 10)
+
+      if (isNaN(b1)) {
+        setItems([]); setSelection({}); setDuplicates({}); setPeriod({});
+        setError("Código do banco no arquivo OFX inválido/não numérico.");
+        return;
+      }
+
+      if (b1 !== b2) {
+        setItems([]); setSelection({}); setDuplicates({}); setPeriod({});
+        setError(`O arquivo OFX pertence ao banco ${bankId} (${b1}), mas a conta é do banco ${accountBankCode} (${b2}).`);
+        return;
+      }
+    } else {
+      if (accData?.bank_id) {
+        setItems([]); setSelection({}); setDuplicates({}); setPeriod({});
+        setError(`Erro ao verificar banco vinculado (ID: ${accData.bank_id}). Contate o suporte.`);
+        return;
+      } else {
+        setItems([]); setSelection({}); setDuplicates({}); setPeriod({});
+        setError("Esta conta não possui um banco vinculado. Edite a conta e selecione um banco para importar OFX.");
+        return;
+      }
+    }
+
     try {
       const metaRaw = localStorage.getItem(`import_meta_${accountId}`)
       if (metaRaw) {
         const meta = JSON.parse(metaRaw)
         if (meta?.file_checksum === sum) { setError("Arquivo já importado anteriormente"); setItems([]); setSelection({}); setDuplicates({}); setPeriod({}); return }
       }
-    } catch {}
-    if (!parsed.length) { 
-      setItems([]); 
-      setSelection({}); 
-      setDuplicates({}); 
-      setPeriod({}); 
-      setError("Nenhuma transação encontrada no arquivo."); 
-      return 
+    } catch { }
+    if (!parsed.length) {
+      setItems([]);
+      setSelection({});
+      setDuplicates({});
+      setPeriod({});
+      setError("Nenhuma transação encontrada no arquivo.");
+      return
     }
     const dates = parsed.map((p) => p.date).sort()
     setPeriod({ start: dates[0], end: dates[dates.length - 1] })
@@ -136,7 +196,7 @@ export function OfxImportDialog({ open, onOpenChange, accountId, onImported }: {
         file_checksum: checksum
       }).select().limit(1)
       importId = impCreated?.[0]?.id
-    } catch {}
+    } catch { }
     const payloads = chosen.map((p) => ({
       user_id: userData.user.id,
       account_id: accountId,
@@ -168,9 +228,9 @@ export function OfxImportDialog({ open, onOpenChange, accountId, onImported }: {
           <DialogTitle>Importar OFX</DialogTitle>
         </DialogHeader>
         <div className="space-y-6 py-2">
-          
+
           {/* File Upload Area */}
-          <div 
+          <div
             className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer group"
             onClick={() => fileInputRef.current?.click()}
           >
@@ -183,12 +243,12 @@ export function OfxImportDialog({ open, onOpenChange, accountId, onImported }: {
             <p className="text-sm text-muted-foreground mt-1">
               {fileName ? "Clique para alterar o arquivo" : "Clique para buscar em seu computador"}
             </p>
-            <Input 
+            <Input
               ref={fileInputRef}
-              type="file" 
-              accept=".ofx" 
-              className="hidden" 
-              onChange={onFileChange} 
+              type="file"
+              accept=".ofx"
+              className="hidden"
+              onChange={onFileChange}
             />
           </div>
 
@@ -206,18 +266,18 @@ export function OfxImportDialog({ open, onOpenChange, accountId, onImported }: {
                   <p className="text-xs text-muted-foreground">Transações selecionadas</p>
                 </div>
               </div>
-              
+
               <div className="max-h-[300px] overflow-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50 sticky top-0 z-10">
                     <tr>
                       <th className="text-left p-3 font-medium text-muted-foreground w-[50px]">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           className="rounded border-gray-300"
                           checked={items.every((it, i) => {
-                             const id = `${it.date}|${it.amount}|${normalizeDesc(it.description)}|${it.fitid || ''}|${i}`
-                             return selection[id]
+                            const id = `${it.date}|${it.amount}|${normalizeDesc(it.description)}|${it.fitid || ''}|${i}`
+                            return selection[id]
                           })}
                           onChange={(e) => {
                             const allSelected = e.target.checked
@@ -241,10 +301,10 @@ export function OfxImportDialog({ open, onOpenChange, accountId, onImported }: {
                       const id = `${it.date}|${it.amount}|${normalizeDesc(it.description)}|${it.fitid || ''}|${i}`
                       const dup = !!duplicates[id]
                       const isSelected = !!selection[id]
-                      
+
                       return (
-                        <tr 
-                          key={id} 
+                        <tr
+                          key={id}
                           className={`
                             transition-colors hover:bg-muted/50
                             ${isSelected ? 'bg-primary/5' : ''}
@@ -252,9 +312,9 @@ export function OfxImportDialog({ open, onOpenChange, accountId, onImported }: {
                           `}
                         >
                           <td className="p-3">
-                            <input 
-                              type="checkbox" 
-                              checked={isSelected} 
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
                               onChange={(e) => setSelection((prev) => ({ ...prev, [id]: e.target.checked }))}
                               className="rounded border-gray-300"
                             />
@@ -283,7 +343,7 @@ export function OfxImportDialog({ open, onOpenChange, accountId, onImported }: {
               </div>
             </Card>
           ) : null}
-          
+
           {error ? (
             <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm flex items-center gap-2 border border-red-100">
               <span className="font-bold">Erro:</span> {error}

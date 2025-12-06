@@ -233,6 +233,7 @@ export default function BankAccounts() {
           balance: payload.balance,
           overdraft_limit: payload.overdraft_limit,
           bank_id: payload.bank_id,
+          bank_code: banks.find((x) => x.id === selectedBank)?.code || null,
         });
       if (error) {
         setInfo("Não foi possível salvar");
