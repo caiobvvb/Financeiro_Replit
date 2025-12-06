@@ -112,7 +112,17 @@ export function OfxImportDialog({ open, onOpenChange, accountId, onImported }: {
 
       if (b1 !== b2) {
         setItems([]); setSelection({}); setDuplicates({}); setPeriod({});
-        setError(`O arquivo OFX pertence ao banco ${bankId} (${b1}), mas a conta é do banco ${accountBankCode} (${b2}).`);
+
+        // Fetch bank names for better error message
+        const { data: banksData } = await supabase
+          .from("banks")
+          .select("code, name")
+          .in("code", [bankId, accountBankCode])
+
+        const ofxBankName = banksData?.find(b => parseInt(b.code, 10) === b1)?.name || bankId
+        const accBankName = banksData?.find(b => parseInt(b.code, 10) === b2)?.name || accountBankCode
+
+        setError(`Este arquivo OFX pertence ao ${ofxBankName}, mas a conta selecionada para importação é do  ${accBankName}.`);
         return;
       }
     } else {
