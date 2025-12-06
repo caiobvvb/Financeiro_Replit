@@ -90,8 +90,8 @@ export default function AccountDetails() {
     const today = new Date();
     const [year, setYear] = React.useState(today.getFullYear());
     const [month, setMonth] = React.useState(today.getMonth() + 1);
-    const [filterImported, setFilterImported] = React.useState<"all"|"only"|"hide">("all");
-    const [filterCategory, setFilterCategory] = React.useState<"all"|"categorized"|"uncategorized">("all");
+    const [filterImported, setFilterImported] = React.useState<"all" | "only" | "hide">("all");
+    const [filterCategory, setFilterCategory] = React.useState<"all" | "categorized" | "uncategorized">("all");
 
     // ------------------------------------------------------------------
     // Helpers
@@ -101,14 +101,32 @@ export default function AccountDetails() {
         return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
     }
 
-    function bankIconByName(name?: string): string | undefined {
-        const n = (name || "").toLowerCase();
+    function getBankIcon(bank?: Bank, accountName?: string): string | undefined {
+        if (bank?.code) {
+            const byCode: Record<string, string> = {
+                "001": "ibb-banco-brasil",
+                "341": "ibb-itau",
+                "237": "ibb-bradesco",
+                "033": "ibb-santander",
+                "104": "ibb-caixa",
+                "260": "ibb-nubank",
+                "077": "ibb-inter",
+                "208": "ibb-btg",
+                "336": "ibb-c6",
+                "748": "ibb-sicredi",
+                "756": "ibb-bancoob",
+            };
+            if (byCode[bank.code]) return byCode[bank.code];
+        }
+
+        const n = (bank?.shortName || bank?.name || accountName || "").toLowerCase();
         if (!n) return undefined;
-        if (n.includes("brasil")) return "ibb-banco-brasil";
+
+        if (n.includes("brasil") || n === "bb") return "ibb-banco-brasil";
         if (n.includes("itaú") || n.includes("itau")) return "ibb-itau";
         if (n.includes("bradesco")) return "ibb-bradesco";
         if (n.includes("santander")) return "ibb-santander";
-        if (n.includes("caixa")) return "ibb-caixa";
+        if (n.includes("caixa") || n === "cef") return "ibb-caixa";
         if (n.includes("nubank") || n.includes("nu ")) return "ibb-nubank";
         if (n.includes("inter")) return "ibb-inter";
         if (n.includes("btg")) return "ibb-btg";
@@ -179,7 +197,7 @@ export default function AccountDetails() {
                 .gte("date", start)
                 .lte("date", end)
                 .order("date", { ascending: false }),
-             supabase
+            supabase
                 .from("bank_transactions")
                 .select("amount")
                 .eq("account_id", accountId)
@@ -200,9 +218,9 @@ export default function AccountDetails() {
 
         // Calculate total balance dynamically
         if (accRes.data) {
-             const initial = Number(accRes.data.balance || 0);
-             const totalTx = (allTxRes.data || []).reduce((sum, t) => sum + Number(t.amount), 0);
-             setCalculatedBalance(initial + totalTx);
+            const initial = Number(accRes.data.balance || 0);
+            const totalTx = (allTxRes.data || []).reduce((sum, t) => sum + Number(t.amount), 0);
+            setCalculatedBalance(initial + totalTx);
         }
 
         setLoading(false);
@@ -295,7 +313,7 @@ export default function AccountDetails() {
     });
 
     const bank = banks.find((b) => b.id === account?.bank_id);
-    const iconClass = bank ? bankIconByName(bank.shortName || bank.name) : account ? bankIconByName(account.name) : undefined;
+    const iconClass = getBankIcon(bank, account?.name);
     const overdraft = Number(account?.overdraft_limit || 0);
     const available = calculatedBalance + overdraft;
 
@@ -323,19 +341,25 @@ export default function AccountDetails() {
                     <div className="flex items-center gap-4">
                         <div
                             className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-md"
-                            style={{ 
-                                backgroundColor: bank?.color || (
-                                    (iconClass?.includes("banco-brasil") || account?.name.toLowerCase().includes("brasil")) 
-                                    ? "#F8D117" 
-                                    : "#999"
-                                ) 
+                            style={{
+                                backgroundColor: (iconClass?.includes("banco-brasil")) ? "#0038A8" : (
+                                    bank?.color || (
+                                        (iconClass?.includes("nubank")) ? "#820AD1" :
+                                            (iconClass?.includes("itau")) ? "#EC7000" :
+                                                (iconClass?.includes("bradesco")) ? "#CC092F" :
+                                                    (iconClass?.includes("santander")) ? "#EC0000" :
+                                                        (iconClass?.includes("caixa")) ? "#0066B3" :
+                                                            (iconClass?.includes("inter")) ? "#FF7A00" :
+                                                                "#999"
+                                    )
+                                )
                             }}
                         >
-                            {bank ? (
+                            {(bank || iconClass) ? (
                                 iconClass ? (
                                     <span className={`${iconClass} text-2xl text-white`}></span>
                                 ) : (
-                                    (bank.shortName || bank.name).substring(0, 2)
+                                    ((bank ? (bank.shortName || bank.name) : account?.name) || "").substring(0, 2).toUpperCase()
                                 )
                             ) : (
                                 <Wallet className="w-6 h-6" />
@@ -455,7 +479,7 @@ export default function AccountDetails() {
                                     onChange={(e) => setSearch(e.target.value)}
                                 />
                             </div>
-                            
+
                             <div className="flex flex-col lg:flex-row gap-4 items-center w-full xl:w-auto overflow-x-auto">
                                 <div className="flex items-center bg-background rounded-md border shadow-sm p-1 shrink-0">
                                     <button className={cn("px-3 py-1.5 text-xs font-medium rounded-sm transition-all flex items-center gap-2", filterImported === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted")} onClick={() => setFilterImported("all")}>

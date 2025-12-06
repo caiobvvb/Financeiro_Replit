@@ -60,8 +60,8 @@ export default function Transactions() {
   const [search, setSearch] = React.useState("");
   const [filterType, setFilterType] = React.useState<"all" | "income" | "expense">("all");
   const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(null);
-  const [filterImported, setFilterImported] = React.useState<"all"|"only"|"hide">("all");
-  const [filterCategory, setFilterCategory] = React.useState<"all"|"categorized"|"uncategorized">("all");
+  const [filterImported, setFilterImported] = React.useState<"all" | "only" | "hide">("all");
+  const [filterCategory, setFilterCategory] = React.useState<"all" | "categorized" | "uncategorized">("all");
 
   const today = new Date();
   const [year, setYear] = React.useState(today.getFullYear());
@@ -258,8 +258,9 @@ export default function Transactions() {
             const bank = banks.find(b => b.id === acc.bank_id);
             const iconClass = bank ? bankIconByName(bank.shortName || bank.name) : bankIconByName(acc.name);
             const isBB = (iconClass && iconClass.includes("banco-brasil")) || acc.name.toLowerCase().includes("brasil");
-            const bg = bank?.color || (isBB ? "#F8D117" : undefined) || "#999";
-            const finalIconClass = iconClass || (isBB ? "ibb-banco-brasil" : undefined);
+            const isNubank = (iconClass && iconClass.includes("nubank")) || acc.name.toLowerCase().includes("nubank") || acc.name.toLowerCase().includes("nu ");
+            const bg = bank?.color || (isBB ? "#0038A8" : undefined) || (isNubank ? "#820AD1" : undefined) || "#999";
+            const finalIconClass = iconClass || (isBB ? "ibb-banco-brasil" : undefined) || (isNubank ? "ibb-nubank" : undefined);
 
             return (
               <div

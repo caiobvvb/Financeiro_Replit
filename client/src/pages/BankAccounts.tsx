@@ -111,7 +111,7 @@ export default function BankAccounts() {
   const [editOverdraftLimit, setEditOverdraftLimit] = React.useState<string>("");
   const [editHasTx, setEditHasTx] = React.useState<boolean>(false);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
-  
+
   // Adjust Balance Modal State
   const [adjustOpen, setAdjustOpen] = React.useState(false);
   const [adjustAccountId, setAdjustAccountId] = React.useState<string>("");
@@ -125,13 +125,13 @@ export default function BankAccounts() {
         setTransactions([]);
         return;
       }
-      
+
       // Fetch Accounts
       const { data: accData, error: accError } = await supabase
         .from("accounts")
         .select("id,name,balance,bank_id,type,overdraft_limit")
         .order("name", { ascending: true });
-        
+
       if (accError || !accData) {
         setAccounts([]);
         return;
@@ -275,9 +275,9 @@ export default function BankAccounts() {
 
   async function updateAccount() {
     try {
-      const updatePayload: any = { 
-        name: editName, 
-        type: editType, 
+      const updatePayload: any = {
+        name: editName,
+        type: editType,
         bank_id: editBankId,
         overdraft_limit: parseMoney(editOverdraftLimit)
       };
@@ -354,7 +354,7 @@ export default function BankAccounts() {
       // Ensure category exists
       const ADJUST_CATEGORY_ID = "4c8c2765-74a9-45d2-9634-42ee4541a333";
       const { data: catData } = await supabase.from("categories").select("id").eq("id", ADJUST_CATEGORY_ID).single();
-      
+
       if (!catData) {
         // Create category if not exists (try)
         await supabase.from("categories").insert({
@@ -477,7 +477,7 @@ export default function BankAccounts() {
                         <SelectItem key={b.id} value={b.id} className="cursor-pointer">
                           <div className="flex items-center gap-2">
                             {bankIconClass(b) ? (
-                              <span className={`${bankIconClass(b)} text-base`} style={{ color: (b.color || "#333") }}></span>
+                              <span className={`${bankIconClass(b)} text-base`} style={{ color: (bankIconClass(b)?.includes("banco-brasil") ? "#0038A8" : (b.color || "#333")) }}></span>
                             ) : (
                               <span className="inline-block w-4 h-4 rounded-sm" style={{ backgroundColor: b.color || "#999" }} />
                             )}
@@ -567,6 +567,15 @@ export default function BankAccounts() {
           const available = currentBalance + limit;
           const isLow = currentBalance < 0; // Simple alert logic, can be improved
 
+          const iconClass = bankIconClass(bank || { name: account.name } as Bank);
+          const isBB = (iconClass?.includes("banco-brasil") || account.name.toLowerCase().includes("brasil"));
+          const isNubank = (iconClass?.includes("nubank") || account.name.toLowerCase().includes("nubank") || account.name.toLowerCase().includes("nu "));
+
+          let bgColor = "#999";
+          if (isBB) bgColor = "#0038A8";
+          else if (bank?.color) bgColor = bank.color;
+          else if (isNubank) bgColor = "#820AD1";
+
           return (
             <Card
               key={account.id}
@@ -576,28 +585,18 @@ export default function BankAccounts() {
               <CardContent className="p-6 flex items-center gap-4">
                 <div
                   className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold shadow-sm"
-                  style={{ 
-                    backgroundColor: bank?.color || (
-                      (bankIconClass(bank)?.includes("banco-brasil") || bank?.name.toLowerCase().includes("brasil")) 
-                      ? "#F8D117" 
-                      : "#999"
-                    ) 
-                  }}
+                  style={{ backgroundColor: bgColor }}
                 >
-                  {bank ? (
-                    bankIconClass(bank) ? (
-                      <span className={`${bankIconClass(bank)} text-2xl text-white`}></span>
-                    ) : (
-                      (bank.shortName || bank.name).substring(0, 2)
-                    )
+                  {iconClass ? (
+                    <span className={`${iconClass} text-2xl text-white`}></span>
                   ) : (
-                    "Ct"
+                    (account.name).substring(0, 2).toUpperCase()
                   )}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <h4 className="font-bold text-foreground">{account.name}</h4>
-                    {isLow && <AlertCircle className="w-4 h-4 text-red-500" title="Saldo negativo" />}
+                    {isLow && <AlertCircle className="w-4 h-4 text-red-500" />}
                   </div>
                   <p className="text-sm text-muted-foreground">{bank?.name || "Banco não informado"}</p>
                   <div className="mt-2 text-xs text-muted-foreground">
@@ -613,7 +612,7 @@ export default function BankAccounts() {
                   <p className="text-xs text-muted-foreground">Saldo Atual</p>
                 </div>
                 <div className="flex items-center gap-2 ml-4">
-                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); openAdjust(account); }} title="Ajustar Saldo">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); openAdjust(account); }} title="Ajustar Saldo">
                     <Scale className="w-4 h-4" />
                   </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => { e.stopPropagation(); openEdit(account); }} title="Editar">
@@ -692,7 +691,7 @@ export default function BankAccounts() {
                 ) : null}
               </div>
             </div>
-             <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit_overdraft" className="text-right">Limite Cheque Esp.</Label>
               <div className="col-span-3">
                 <Input
