@@ -343,42 +343,11 @@ export default function StatementsPage() {
           if (Object.keys(payload).length) {
             await supabase.from("transactions").update(payload).in("id", ids);
           }
-          
-          // Update tags
-          const current = tagsByTx[editTx.id] || [];
-          const toAdd = editTags.filter((id) => !current.includes(id));
-          const toRemove = current.filter((id) => !editTags.includes(id));
-          
-          if (toAdd.length || toRemove.length) {
-              // This is a bit complex for bulk tags, let's simplify: 
-              // for each transaction, sync tags. 
-              // For now, let's just apply the same tag changes to all.
-              // A simpler approach: delete all tags for these txs and insert new ones? 
-              // Or just skip tag bulk update for safety unless requested.
-              // Let's keep it simple and skip tag bulk update or implement it properly?
-              // The original code didn't seem to handle bulk tags explicitly in the else block?
-              // Wait, the original code lines 324-344 ONLY updated amount!
-              // "await supabase.from("transactions").update({ amount }).eq("id", row.id);"
-              
-              // So previously, bulk mode ONLY updated amounts.
-              // Now that we removed amount redistribution, bulk save might do nothing?
-              // The user said "no editar nao precisa totol restante".
-              // Maybe they only want "Gerar parcelas" in this mode.
-              // But if they click "Salvar", what should happen?
-              // Let's assume they might want to update description/category for all future installments.
-          }
       }
     }
     setEditSaving(false);
     setEditOpen(false);
     await fetchAll();
-  }
-
-  function addMonthsISO(iso: string, n: number) {
-    const [y, m, d] = iso.split("-").map((x) => parseInt(x, 10));
-    const dt = new Date(y, m - 1, d);
-    dt.setMonth(dt.getMonth() + n);
-    return dt.toISOString().slice(0, 10);
   }
 
   function computeStatementLocal(card: any, dateStr: string) {
