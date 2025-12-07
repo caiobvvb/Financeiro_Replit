@@ -18,6 +18,7 @@ import CalendarPage from "@/pages/Calendar";
 import BankAccounts from "@/pages/BankAccounts";
 import TagsPage from "@/pages/Tags";
 import InvoiceOverview from "@/pages/InvoiceOverview";
+import PdfDev from "@/pages/PdfDev";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
@@ -37,6 +38,7 @@ function Router() {
       <Route path="/tags" component={() => <ProtectedRoute component={TagsPage} />} />
       <Route path="/faturas/:cardId" component={() => <ProtectedRoute component={StatementsPage} />} />
       <Route path="/faturas/:cardId/overview" component={() => <ProtectedRoute component={InvoiceOverview} />} />
+      <Route path="/dev/pdf" component={() => <ProtectedRoute component={PdfDev} />} />
       <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
       <Route path="/calendar" component={() => <ProtectedRoute component={CalendarPage} />} />
       <Route component={NotFound} />
